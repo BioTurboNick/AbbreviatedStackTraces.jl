@@ -18,7 +18,7 @@ import Base:
     showerror
 
 struct ExceptionInfo
-    error::Exception
+    error::Any
     stack::Vector{StackFrame}
 end
 
