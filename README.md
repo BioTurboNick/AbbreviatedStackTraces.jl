@@ -17,5 +17,3 @@ It aims to find the stack frames of code you don't control and excludes them by 
 ![image](https://user-images.githubusercontent.com/1438610/115908246-ec53bf00-a437-11eb-9e99-b71d8b792270.png)
 
 The global `err` variable stores the last error and can show the full, original stack trace easily.
-
-**NOTE:** I wasn't sure how to hook directly into the REPL from a package. But the PR version does, and appropriately allows worker processes and non-REPL sessions to emit the full stack trace as normal.
