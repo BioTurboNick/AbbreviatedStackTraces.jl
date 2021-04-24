@@ -54,30 +54,29 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")) ||
         (frame[1].func == top_level_scope_sym)
     end
+
     # include one frame lower
-    is = sort(union(is, is .- 1))
+    is = filter(>(0), sort(union(is, is .- 1)))
 
     if length(is) > 0
         println(io, "\nStacktrace:")
 
-        if is[1] > 0
+        if is[1] > 1
             print_omitted_modules(1, is[1])
             println(io, repeat(' ', ndigits_max + 2) * "⋮")
         end
 
         lasti = first(is)
         @views for i ∈ is
-            if i > 0
-                if i > lasti + 1
-                    println(io, repeat(' ', ndigits_max + 2) * "⋮")
-                    print_omitted_modules(lasti + 1, i - 1)
-                    println(io, repeat(' ', ndigits_max + 2) * "⋮")
-                end
-                print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
-                if i < num_frames
-                    println(io)
-                    print_linebreaks && println(io)
-                end
+            if i > lasti + 1
+                println(io, repeat(' ', ndigits_max + 2) * "⋮")
+                print_omitted_modules(lasti + 1, i - 1)
+                println(io, repeat(' ', ndigits_max + 2) * "⋮")
+            end
+            print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
+            if i < num_frames
+                println(io)
+                print_linebreaks && println(io)
             end
             lasti = i
         end
