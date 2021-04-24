@@ -23,7 +23,13 @@ import Base:
     process_backtrace
 
 import Base.StackTraces:
-    top_level_scope_sym
+    is_top_level_frame
+
+is_base_not_REPL(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
+is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
+is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
+is_stdlib(path) = contains(path, r"[/\\]julia[/\\]stdlib")
+is_private_not_julia(path) = contains(path, r"[/\\].*[/\\]") && !contains(path, r"[/\\].julia[/\\]")
 
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
@@ -48,12 +54,15 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         println(io)
     end
 
-    # find all frames that aren't in Julia base, stdlib, or an added package
+    # select frames from relevant packages
     is = findall(trace) do frame
         file = String(frame[1].file)
-        !contains(file, r"[/\\].julia[/\\]packages[/\\]|[/\\]julia[/\\]stdlib") &&
-        (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")) ||
-        (frame[1].func == top_level_scope_sym)
+        !is_base_not_REPL(file) ||
+        !is_registry_pkg(file) ||
+        is_dev_pkg(file)
+        !is_stdlib(file) ||
+        !is_private_not_julia(file) ||
+        is_top_level_frame(frame)
     end
 
     # include one frame lower
