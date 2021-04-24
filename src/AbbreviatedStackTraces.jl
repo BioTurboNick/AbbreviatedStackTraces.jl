@@ -57,12 +57,12 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     # select frames from relevant packages
     is = findall(trace) do frame
         file = String(frame[1].file)
-        !is_base_not_REPL(file) ||
-        !is_registry_pkg(file) ||
-        is_dev_pkg(file)
-        !is_stdlib(file) ||
+        !is_base_not_REPL(file) &&
+        !is_registry_pkg(file) &&
+        !is_stdlib(file) &&
         !is_private_not_julia(file) ||
-        is_top_level_frame(frame)
+        is_dev_pkg(file) ||
+        is_top_level_frame(frame[1])
     end
 
     # include one frame lower
