@@ -1,4 +1,5 @@
 module AbbreviatedStackTraces
+__precompile__(false)
 
 import REPL:
     print_response
