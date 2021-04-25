@@ -20,7 +20,8 @@ import Base:
     STACKTRACE_MODULECOLORS,
     stacktrace_linebreaks,
     print_stackframe,
-    process_backtrace
+    process_backtrace,
+    update_stackframes_callback
 
 import Base.StackTraces:
     is_top_level_frame
@@ -115,18 +116,18 @@ end
 function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt; backtrace = bt!==nothing, compacttrace)
+    showerror(IOContext(io, :limit => true, :compacttrace => compacttrace), er, bt; backtrace = bt!==nothing)
     println(io)
 end
 function display_error(io::IO, stack::Vector, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true), bt, compacttrace)
+    show_exception_stack(IOContext(io, :limit => true, :compacttrace => compacttrace), bt)
     println(io)
 end
 
 # copied from errorshow.jl with added compacttrace argument
-function show_exception_stack(io::IO, stack::Vector, compacttrace = false)
+function show_exception_stack(io::IO, stack::Vector)
     # Display exception stack with the top of the stack first.  This ordering
     # means that the user doesn't have to scroll up in the REPL to discover the
     # root cause.
@@ -136,29 +137,11 @@ function show_exception_stack(io::IO, stack::Vector, compacttrace = false)
             printstyled(io, "\ncaused by: ", color=Base.error_color())
         end
         exc, bt = stack[i]
-        showerror(io, exc, bt; backtrace = bt!==nothing, compacttrace)
+        showerror(io, exc, bt; backtrace = bt!==nothing)
         i == 1 || println(io)
     end
 end
-function showerror(io::IO, ex, bt; backtrace=true, compacttrace=false)
-    try
-        showerror(io, ex)
-    finally
-        backtrace && show_backtrace(io, bt, compacttrace)
-    end
-end
-function showerror(io::IO, ex::LoadError, bt; backtrace=true, compacttrace=false)
-    !isa(ex.error, LoadError) && print(io, "LoadError: ")
-    showerror(io, ex.error, bt; backtrace=backtrace, compacttrace)
-    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
-end
-showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
-function showerror(io::IO, ex::InitError, bt; backtrace=true, compacttrace=false)
-    print(io, "InitError: ")
-    showerror(io, ex.error, bt; backtrace=backtrace, compacttrace)
-    print(io, "\nduring initialization of module ", ex.mod)
-end
-function show_backtrace(io::IO, t::Vector, compacttrace = false)
+function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -186,23 +169,12 @@ function show_backtrace(io::IO, t::Vector, compacttrace = false)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    if compacttrace
+    if get(io, :compacttrace, false)
         show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     else
         show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     end
     return
-end
-
-#copied from task.jl with added compacttrace argument
-function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true, compacttrace=false)
-    print(io, "TaskFailedException")
-    if bt !== nothing && backtrace
-        show_backtrace(io, bt)
-    end
-    println(io)
-    printstyled(io, "\n    nested task error: ", color=error_color())
-    show_task_exception(io, ex.task)
 end
 
 struct ExceptionInfo
