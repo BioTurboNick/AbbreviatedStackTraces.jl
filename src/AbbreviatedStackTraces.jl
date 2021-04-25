@@ -133,7 +133,7 @@ function show_exception_stack(io::IO, stack::Vector, compacttrace = false)
     nexc = length(stack)
     for i = nexc:-1:1
         if nexc != i
-            printstyled(io, "\ncaused by: ", color=error_color())
+            printstyled(io, "\ncaused by: ", color=Base.error_color())
         end
         exc, bt = stack[i]
         showerror(io, exc, bt; backtrace = bt!==nothing, compacttrace)
