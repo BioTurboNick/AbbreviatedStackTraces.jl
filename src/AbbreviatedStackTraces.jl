@@ -63,7 +63,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         !is_stdlib(file) &&
         !is_private_not_julia(file) ||
         is_dev_pkg(file) ||
-        is_top_level_frame(frame[1])
+        (is_top_level_frame(frame[1]) && contains(file, "REPL"))
     end
 
     # get list of visible modules
@@ -78,6 +78,9 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     # include the immediate frame called into from user-controlled code
     filter!(>(0), sort!(union!(is, is .- 1, internali .- 1)))
+
+    # add back top-level if not already present
+    length(trace) ∈ is || push!(is, length(trace))
 
     if length(is) > 0
         println(io, "\nStacktrace:")
