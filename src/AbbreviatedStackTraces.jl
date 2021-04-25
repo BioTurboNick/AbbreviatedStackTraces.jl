@@ -90,7 +90,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         println(io, "\nStacktrace:")
 
         if is[1] > 1
-            print_omitted_modules(1, is[1])
+            print_omitted_modules(1, is[1] - 1)
             println(io, repeat(' ', ndigits_max + 2) * "⋮")
         end
 
