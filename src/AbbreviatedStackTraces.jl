@@ -76,11 +76,15 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end, is)
     setdiff!(internali, internali .+ 1)
 
-    # include the immediate frame called into from user-controlled code
-    filter!(>(0), sort!(union!(is, is .- 1, internali .- 1)))
+    # include the highest immediate hidden frame called into from user-controlled code
+    filter!(>(0), sort!(union!(is, minimum(union!(is .- 1, internali .- 1)))))
 
-    # add back top-level if not already present
-    length(trace) ∈ is || push!(is, length(trace))
+    # add back top-level if not already present; and if it is, add the next one
+    if length(trace) ∈ is
+        sort!(union!(is, length(trace) - 1))
+    else
+        push!(is, length(trace))
+    end
 
     if length(is) > 0
         println(io, "\nStacktrace:")
