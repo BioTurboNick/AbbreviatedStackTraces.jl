@@ -14,6 +14,6 @@ using BenchmarkTools, Plots
 
 It aims to find the stack frames of code you don't control and excludes them by default, except for the first frame into that package. In it's place, it lists the modules called in the intervening frames. The theory is that errors in your code are much more likely than errors inside Base, the Stdlibs, or published packages, so their internals are usually superfluous.
 
-![image](https://user-images.githubusercontent.com/1438610/115908246-ec53bf00-a437-11eb-9e99-b71d8b792270.png)
+![image](https://user-images.githubusercontent.com/1438610/115982784-a0099b80-a56b-11eb-80dd-b715ed245f34.png)
 
 The global `err` variable stores the last error and can show the full, original stack trace easily.
