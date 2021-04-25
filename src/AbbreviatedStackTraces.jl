@@ -46,7 +46,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # Find modules involved in intermediate frames and print them
         modules = filter(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         length(modules) > 0 || return
-        print(io, repeat(' ', ndigits_max + 2))
+        print(io, " " ^ (ndigits_max + 2))
         for m ∈ modules
             modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
             printstyled(io, m, color = modulecolor)
@@ -55,7 +55,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         println(io)
     end
 
-    # select frames from relevant packages
+    # select frames from user-controlled code
     is = findall(trace) do frame
         file = String(frame[1].file)
         !is_base_not_REPL(file) &&
@@ -66,8 +66,18 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         is_top_level_frame(frame[1])
     end
 
-    # include one frame lower
-    is = filter(>(0), sort(union(is, is .- 1)))
+    # get list of visible modules
+    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
+    Main ∈ visible_modules || push!(visible_modules, Main)
+
+    # find the highest contiguous internal frames evaluted in the context of a visible module
+    internali = setdiff!(findall(trace) do frame
+        parentmodule(frame[1]) ∈ visible_modules
+    end, is)
+    setdiff!(internali, internali .+ 1)
+
+    # include the immediate frame called into from user-controlled code
+    filter!(>(0), sort!(union!(is, is .- 1, internali .- 1)))
 
     if length(is) > 0
         println(io, "\nStacktrace:")
