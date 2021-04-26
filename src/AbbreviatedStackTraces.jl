@@ -100,8 +100,10 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # add back top-level if not REPL
         push!(is, num_frames)
     end
+    
+    num_vis_frames = length(is)
 
-    if length(is) > 0
+    if num_vis_frames > 0
         println(io, "\nStacktrace:")
 
         if is[1] > 1
@@ -114,17 +116,18 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
                 print_omitted_modules(lasti + 1, i - 1)
             end
             print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
-            if i < num_frames
+            if (is[end] == num_frames && i < num_frames) || i < num_frames - 1
                 println(io)
                 print_linebreaks && println(io)
             end
             lasti = i
         end
-        is[end] == num_frames && println(io)
 
         # print if frames other than top-level were omitted
-        (num_frames > length(is) && !(num_frames - 1 == length(is) && is[end] != num_frames)) &&
+        if num_frames > num_vis_frames && !(num_frames - 1 == num_vis_frames && is[end] != num_frames)
+            println(io)
             print(io, "Use `err` to retrieve the full stack trace.")
+        end
     end
 end
 
