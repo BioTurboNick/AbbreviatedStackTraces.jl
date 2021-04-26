@@ -35,7 +35,7 @@ import Base.StackTraces:
     show_spec_linfo,
     top_level_scope_sym
 
-is_base_not_REPL(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
+is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
 is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_stdlib(path) = contains(path, r"[/\\]julia[/\\]stdlib")
@@ -71,12 +71,12 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     # select frames from user-controlled code
     is = findall(trace) do frame
         file = String(frame[1].file)
-        !is_base_not_REPL(file) &&
+        !is_base_not_repl(file) &&
         !is_registry_pkg(file) &&
         !is_stdlib(file) &&
         !is_private_not_julia(file) ||
         is_dev_pkg(file) ||
-        (is_top_level_frame(frame[1]) && contains(file, "REPL"))
+        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
     end
 
     # get list of visible modules
@@ -91,11 +91,17 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     # include the next immediate hidden frame called into from user-controlled code
     filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
+    
+    if length(is) > 0 && is[end] == num_frames
+        # remove REPL-based top-level
+        # note: file field for top-level is different from the rest, doesn't include ./
+        startswith(String(trace[end][1].file), "REPL") && pop!(is)
+    elseif num_frames > 1
+        # add back top-level if not REPL
+        push!(is, num_frames)
+    end
 
     if length(is) > 0
-        # remove top-level if present
-        is[end] == length(trace) && pop!(is)
-
         println(io, "\nStacktrace:")
 
         if is[1] > 1
@@ -114,11 +120,12 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             end
             lasti = i
         end
-    else
-        println(io)
-    end
+        is[end] == num_frames && println(io)
 
-    length(trace) > length(is) && print(io, "Use `err` to retrieve the full stack trace.")
+        # print if frames other than top-level were omitted
+        (num_frames > length(is) && !(num_frames - 1 == length(is) && is[end] != num_frames)) &&
+            print(io, "Use `err` to retrieve the full stack trace.")
+    end
 end
 
 function get_modulecolor!(modulecolordict, m, modulecolorcycler)
