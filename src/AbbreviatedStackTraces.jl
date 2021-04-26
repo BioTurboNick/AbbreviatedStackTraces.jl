@@ -7,8 +7,15 @@ import REPL:
 import Base:
     BIG_STACKTRACE_SIZE,
     catch_stack,
+    CodeInfo,
+    contractuser,
+    empty_sym,
     invokelatest,
+    MethodInstance,
     printstyled,
+    print_stackframe,
+    print_within_stacktrace,
+    process_backtrace,
     scrub_repl_backtrace,
     show,
     showerror,
@@ -16,15 +23,17 @@ import Base:
     show_exception_stack,
     show_full_backtrace,
     StackFrame,
+    stacktrace_contract_userdir,
+    stacktrace_expand_basepaths,
     STACKTRACE_FIXEDCOLORS,
     STACKTRACE_MODULECOLORS,
     stacktrace_linebreaks,
-    print_stackframe,
-    process_backtrace,
     update_stackframes_callback
 
 import Base.StackTraces:
-    is_top_level_frame
+    is_top_level_frame,
+    show_spec_linfo,
+    top_level_scope_sym
 
 is_base_not_REPL(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
 is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
@@ -246,6 +255,102 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
     end
     Base.sigatomic_end()
     nothing
+end
+
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
+    file, line = string(frame.file), frame.line
+    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
+
+    # Used by the REPL to make it possible to open
+    # the location of a stackframe/method in the editor.
+    if haskey(io, :last_shown_line_infos)
+        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
+    end
+
+    inlined = getfield(frame, :inlined)
+    modul = parentmodule(frame)
+
+    # frame number
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+    print(io, " ")
+
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+    if n > 1
+        printstyled(io, " (repeats $n times)"; color=:light_black)
+    end
+
+    if !(get(io, :compacttrace, false) && get(io, :minimaltrace, false))
+        println(io)
+        print(io, " " ^ (digit_align_width + 1))
+    end
+
+    # @
+    printstyled(io, " " * "@ ", color = :light_black)
+
+    # module
+    if modul !== nothing
+        printstyled(io, modul, color = modulecolor)
+        print(io, " ")
+    end
+
+    # filepath
+    pathparts = splitpath(file)
+    folderparts = pathparts[1:end-1]
+    if !isempty(folderparts)
+        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
+    end
+
+    # filename, separator, line
+    # use escape codes for formatting, printstyled can't do underlined and color
+    # codes are bright black (90) and underlined (4)
+    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
+
+    # inlined
+    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+#copied from stacktraces.jl to add compact option
+function show_spec_linfo(io::IO, frame::StackFrame)
+    linfo = frame.linfo
+    if linfo === nothing || (get(io, :compacttrace, false) && get(io, :minimaltrace, false))
+        if frame.func === empty_sym
+            print(io, "ip:0x", string(frame.pointer, base=16))
+        elseif frame.func === top_level_scope_sym
+            print(io, "top-level scope")
+        else
+            Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+        end
+    elseif linfo isa MethodInstance
+        def = linfo.def
+        if isa(def, Method)
+            sig = linfo.specTypes
+            argnames = Base.method_argnames(def)
+            if def.nkw > 0
+                # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
+                kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
+                uw = Base.unwrap_unionall(sig)::DataType
+                pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
+                kwnames = argnames[2:(def.nkw+1)]
+                for i = 1:length(kwnames)
+                    str = string(kwnames[i])::String
+                    if endswith(str, "...")
+                        kwnames[i] = Symbol(str[1:end-3])
+                    end
+                end
+                Base.show_tuple_as_call(io, def.name, pos_sig;
+                                        demangle=true,
+                                        kwargs=zip(kwnames, kwarg_types),
+                                        argnames=argnames[def.nkw+2:end])
+            else
+                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+            end
+        else
+            Base.show_mi(io, linfo, true)
+        end
+    elseif linfo isa CodeInfo
+        print(io, "top-level scope")
+    end
 end
 
 end
