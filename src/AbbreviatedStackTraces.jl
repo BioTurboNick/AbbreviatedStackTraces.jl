@@ -97,9 +97,6 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
         startswith(String(trace[end][1].file), "REPL") && pop!(is)
-    elseif num_frames > 1
-        # add back top-level if not REPL
-        push!(is, num_frames)
     end
     
     num_vis_frames = length(is)
@@ -125,10 +122,15 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         end
 
         # print if frames other than top-level were omitted
-        if num_frames > num_vis_frames && !(num_frames - 1 == num_vis_frames && is[end] != num_frames)
+        if num_frames - 1 > num_vis_frames
+            lasti < num_frames - 1 && print_omitted_modules(lasti + 1, num_frames - 1)
             println(io)
             print(io, "Use `err` to retrieve the full stack trace.")
         end
+    elseif num_frames > 1
+        println(io)
+        print_omitted_modules(1, num_frames - 1)
+        print(io, "Use `err` to retrieve the full stack trace.")
     end
 end
 
