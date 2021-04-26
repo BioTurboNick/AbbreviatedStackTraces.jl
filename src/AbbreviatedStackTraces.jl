@@ -22,6 +22,7 @@ import Base:
     show_backtrace,
     show_exception_stack,
     show_full_backtrace,
+    show_tuple_as_call,
     StackFrame,
     stacktrace_contract_userdir,
     stacktrace_expand_basepaths,
@@ -324,10 +325,19 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
+    if VERSION ≥ v"1.7-DEV"
+        printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
+    else
+        printstyled(io, pathparts[end], ":", line; color = :light_black)
+    end
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+if VERSION < v"1.7-DEV"
+show_tuple_as_call(io::IO, name::Symbol, sig::Type; demangle=false, kwargs=nothing, argnames=nothing, qualified=false, hasfirst=true) =
+    Base.show_tuple_as_call(io, name, sig, demangle, kwargs, argnames, qualified)
 end
 
 #copied from stacktraces.jl to add compact option
