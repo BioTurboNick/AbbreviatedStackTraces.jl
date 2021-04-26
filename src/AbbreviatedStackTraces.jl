@@ -147,7 +147,7 @@ function get_modulecolor!(modulecolordict, m, modulecolorcycler)
     end
 end
 
-# copied from client.jl with added compacttrace argument
+# copied from client.jl with added compacttrace argument, and scrubing error frame
 function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
@@ -159,6 +159,17 @@ function display_error(io::IO, stack::Vector, compacttrace = false)
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
     show_exception_stack(IOContext(io, :limit => true, :compacttrace => compacttrace), bt)
     println(io)
+end
+function scrub_repl_backtrace(bt)
+    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
+        bt = stacktrace(bt)
+        # remove REPL-related frames from interactive printing
+        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+        # remove final frame if it is `error` and in Base
+        length(bt) > 1 && bt[1].func == :error && deleteat!(bt, 1)
+    end
+    return bt
 end
 
 # copied from errorshow.jl with added compacttrace argument
