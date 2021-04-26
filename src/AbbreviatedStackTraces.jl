@@ -167,8 +167,6 @@ function scrub_repl_backtrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
-        # remove final frame if it is `error` and in Base
-        length(bt) > 1 && bt[1].func == :error && deleteat!(bt, 1)
     end
     return bt
 end
