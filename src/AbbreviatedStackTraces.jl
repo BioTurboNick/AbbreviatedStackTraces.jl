@@ -57,7 +57,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
         print(io, "[" * string(i) * "-" * string(j) * "] ")
-        println(io, "⋮")
+        printstyled(io, "⋮", bold = true)
         print(io, " " ^ (ndigits_max + 2))
         printstyled(io, "@ ", color = :light_black)
         if length(modules) > 0
