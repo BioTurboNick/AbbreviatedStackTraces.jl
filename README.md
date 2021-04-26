@@ -20,4 +20,5 @@ The global `err` variable stores the last error and can show the full, original 
 
 There is an optional minimal display available, accessed by setting `ENV["JULIA_STACKTRACE_MINIMAL"] = true`.
 ![image](https://user-images.githubusercontent.com/1438610/116162349-94c98380-a6c3-11eb-9b41-961d0d38673f.png)
+
 (The `#plot#146` display is a bug that I think is going to be fixed in Julia proper.)
