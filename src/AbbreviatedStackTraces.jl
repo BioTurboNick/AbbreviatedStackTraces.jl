@@ -60,10 +60,10 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         println(io, "⋮")
         print(io, " " ^ (ndigits_max + 2))
         printstyled(io, "@ ", color = :light_black)
-        for m ∈ modules
+        for (i, m) ∈ enumerate(modules)
             modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
             printstyled(io, m, color = modulecolor)
-            print(io, " ")
+            i < length(modules) && print(io, ", ")
         end
         println(io)
     end
