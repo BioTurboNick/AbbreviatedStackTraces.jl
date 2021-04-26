@@ -59,7 +59,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         print(io, "[" * string(i) * "-" * string(j) * "] ")
         printstyled(io, "⋮", bold = true)
         printstyled(io, " [internal frames]", color = :light_black)
-        if !parse(Bool, ENV["JULIA_STACKTRACE_MINIMAL"])
+        if !haskey(ENV, "JULIA_STACKTRACE_MINIMAL") || !parse(Bool, ENV["JULIA_STACKTRACE_MINIMAL"])
             println(io)
             print(io, " " ^ (ndigits_max + 2))
         else
@@ -318,7 +318,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
 
-    if !(get(io, :compacttrace, false) && parse(Bool, ENV["JULIA_STACKTRACE_MINIMAL"])) #get(io, :minimaltrace, false))
+    if !(get(io, :compacttrace, false) && haskey(ENV, "JULIA_STACKTRACE_MINIMAL") && parse(Bool, ENV["JULIA_STACKTRACE_MINIMAL"])) #get(io, :minimaltrace, false))
         println(io)
         print(io, " " ^ (digit_align_width + 1))
     end
@@ -360,7 +360,7 @@ end
 #copied from stacktraces.jl to add compact option
 function show_spec_linfo(io::IO, frame::StackFrame)
     linfo = frame.linfo
-    if linfo === nothing || (get(io, :compacttrace, false) && parse(Bool, ENV["JULIA_STACKTRACE_MINIMAL"])) #get(io, :minimaltrace, false))
+    if linfo === nothing || (get(io, :compacttrace, false) && haskey(ENV, "JULIA_STACKTRACE_MINIMAL") && parse(Bool, ENV["JULIA_STACKTRACE_MINIMAL"])) #get(io, :minimaltrace, false))
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
