@@ -54,18 +54,26 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
-        modules = filter(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
-        length(modules) > 0 || return
+        modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
         print(io, "[" * string(i) * "-" * string(j) * "] ")
         println(io, "⋮")
         print(io, " " ^ (ndigits_max + 2))
         printstyled(io, "@ ", color = :light_black)
-        for (i, m) ∈ enumerate(modules)
-            modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
-            printstyled(io, m, color = modulecolor)
-            i < length(modules) && print(io, ", ")
+        if length(modules) > 0
+            for (i, m) ∈ enumerate(modules)
+                modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
+                printstyled(io, m, color = modulecolor)
+                i < length(modules) && print(io, ", ")
+            end
         end
+        # indicate presence of inlined methods which lack module information
+        # (they all do right now)
+        if any(t[1].inlined && isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
+            length(modules) > 0 && print(io, ", ")
+            printstyled(io, "[inlined methods]", color = :light_black)
+        end
+
         println(io)
     end
 
