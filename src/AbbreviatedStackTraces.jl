@@ -180,15 +180,6 @@ function display_error(io::IO, stack::Vector, compacttrace = false)
     show_exception_stack(IOContext(io, :limit => true, :compacttrace => compacttrace), bt)
     println(io)
 end
-function scrub_repl_backtrace(bt)
-    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
-        bt = stacktrace(bt)
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
-        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
-    end
-    return bt
-end
 
 # copied from errorshow.jl with added compacttrace argument
 function show_exception_stack(io::IO, stack::Vector)
