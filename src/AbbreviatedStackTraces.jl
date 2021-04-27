@@ -31,6 +31,11 @@ import Base:
     stacktrace_linebreaks,
     update_stackframes_callback
 
+import Distributed:
+    myid,
+    RemoteException,
+    showerror
+
 import Base.StackTraces:
     is_top_level_frame,
     show_spec_linfo,
@@ -165,6 +170,12 @@ function get_modulecolor!(modulecolordict, m, modulecolorcycler)
     else
         return :default
     end
+end
+
+# copied from Distributed/process_messages.jl and added dealing with RemoteException
+function showerror(io::IO, re::RemoteException)
+    (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
+    showerror(IOContext(io, :compacttrace => false), re.captured)
 end
 
 # copied from client.jl with added compacttrace argument, and scrubing error frame
