@@ -61,10 +61,17 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
-        print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
-        print(io, "[" * string(i) * "-" * string(j) * "] ")
-        printstyled(io, "⋮", bold = true)
-        printstyled(io, " [internal frames]", color = :light_black)
+        if i < j
+            print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
+            print(io, "[" * string(i) * "-" * string(j) * "] ")
+            printstyled(io, "⋮", bold = true)
+            printstyled(io, " [internal frames]", color = :light_black)
+        else
+            print(io, " " ^ (ndigits_max - ndigits(i) + 1))
+            print(io, "[" * string(i) * "] ")
+            printstyled(io, "⋮", bold = true)
+            printstyled(io, " [internal frame]", color = :light_black)
+        end
         if !parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
             println(io)
             print(io, " " ^ (ndigits_max + 2))
