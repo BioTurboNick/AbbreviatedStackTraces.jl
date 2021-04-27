@@ -9,6 +9,7 @@ import Base:
     catch_stack,
     CodeInfo,
     contractuser,
+    demangle_function_name,
     empty_sym,
     invokelatest,
     MethodInstance,
@@ -295,6 +296,20 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
     end
     Base.sigatomic_end()
     nothing
+end
+
+#copied from show.jl to fix, for some reason it wasn't working
+function demangle_function_name(name::AbstractString)
+    demangle = split(name, '#')
+    # kw sorters and impl methods use the name scheme `f#...`
+    if length(demangle) >= 2
+        if demangle[1] != ""
+            return demangle[1]
+        elseif demangle[2] != ""
+            return demangle[2]
+        end
+    end
+    return name
 end
 
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
