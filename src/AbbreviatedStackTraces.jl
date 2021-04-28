@@ -86,9 +86,9 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         end
         # indicate presence of inlined methods which lack module information
         # (they all do right now)
-        if any(t[1].inlined && isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
+        if any(isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
             length(modules) > 0 && print(io, ", ")
-            printstyled(io, "[inlined methods]", color = :light_black)
+            printstyled(io, "Unknown", color = :light_black)
         end
 
         println(io)
