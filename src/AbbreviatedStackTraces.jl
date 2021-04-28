@@ -42,6 +42,8 @@ import Base.StackTraces:
     show_spec_linfo,
     top_level_scope_sym
 
+include("vscode.jl")
+
 is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
 is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
