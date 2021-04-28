@@ -64,14 +64,12 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         if i < j
             print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
             print(io, "[" * string(i) * "-" * string(j) * "] ")
-            printstyled(io, "⋮", bold = true)
-            printstyled(io, " [internal frames]", color = :light_black)
         else
             print(io, " " ^ (ndigits_max - ndigits(i) + 1))
             print(io, "[" * string(i) * "] ")
-            printstyled(io, "⋮", bold = true)
-            printstyled(io, " [internal frame]", color = :light_black)
         end
+        printstyled(io, "⋮ ", bold = true)
+        printstyled(io, "internal", color = :light_black)
         if !parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
             println(io)
             print(io, " " ^ (ndigits_max + 2))
