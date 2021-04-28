@@ -14,11 +14,9 @@ using BenchmarkTools, Plots
 
 It aims to find the stack frames of code you don't control and excludes them by default, except for the first frame into that package. In it's place, it lists the modules called in the intervening frames. The theory is that errors in your code are much more likely than errors inside Base, the Stdlibs, or published packages, so their internals are usually superfluous.
 
-![image](https://user-images.githubusercontent.com/1438610/116154841-372f3a00-a6b7-11eb-86d5-31980ea04ffe.png)
+![image](https://user-images.githubusercontent.com/1438610/116329328-1dfeba00-a799-11eb-8b86-f5c28e5b78e0.png)
 
 The global `err` variable stores the last error and can show the full, original stack trace easily.
 
 There is an optional minimal display available, accessed by setting `ENV["JULIA_STACKTRACE_MINIMAL"] = true`.
-![image](https://user-images.githubusercontent.com/1438610/116162349-94c98380-a6c3-11eb-9b41-961d0d38673f.png)
-
-(The `#plot#146` display is a bug that I think is going to be fixed in Julia proper.)
+![image](https://user-images.githubusercontent.com/1438610/116329297-0b848080-a799-11eb-9d71-32650092b3a5.png)
