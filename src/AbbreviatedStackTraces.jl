@@ -257,6 +257,7 @@ end
 
 show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
 
+# copied from client.jl with added code to account for sysimages that are missing `eval`
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = stacktrace(bt)
