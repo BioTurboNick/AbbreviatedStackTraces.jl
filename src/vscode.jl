@@ -12,5 +12,8 @@ function display_repl_error(io, err, bt)
     println(io)
 end
 end
-catch
+catch e
+    if !isa(e, UndefVarError) || e.var != :VSCodeServer
+        rethrow()
+    end
 end
