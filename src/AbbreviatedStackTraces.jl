@@ -49,6 +49,7 @@ is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_stdlib(path) = contains(path, r"[/\\]julia[/\\]stdlib")
 is_private_not_julia(path) = contains(path, r"[/\\].*[/\\]") && !contains(path, r"[/\\].julia[/\\]")
+is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
 
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
@@ -119,6 +120,17 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     # include the next immediate hidden frame called into from user-controlled code
     filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
+
+    # for each appearance of an already-visible `materialize` broadcast frame, include
+    # the next immediate hidden frame after the last `broadcast` frame
+    broadcasti = []
+    for i ∈ is
+        trace[i][1].func == :materialize || continue
+        push!(broadcasti, findlast(trace[1:i - 1]) do frame
+            !is_broadcast(String(frame[1].file))
+        end)
+    end
+    sort!(union!(is, broadcasti))
     
     if length(is) > 0 && is[end] == num_frames
         # remove REPL-based top-level
