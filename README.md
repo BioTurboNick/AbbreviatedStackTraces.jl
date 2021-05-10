@@ -7,6 +7,7 @@ Chaining packages together, or particularly complex packages, can produce some n
 Here's an example of a stack trace by chaining BenchmarkTools and Plots:
 
 ```
+]add https://github.com/BioTurboNick/AbbreviatedStackTraces.jl # to install (not in registry)
 using AbbreviatedStackTraces # over-writes error-related `Base` methods
 using BenchmarkTools, Plots
 @btime plot([1,2,3], seriestype=:blah)
