@@ -137,6 +137,11 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # note: file field for top-level is different from the rest, doesn't include ./
         startswith(String(trace[end][1].file), "REPL") && pop!(is)
     end
+
+    if length(is) == 1 && trace[only(is)][1].func == :materialize
+        # remove a materialize frame if it is the only visible frame
+        pop!(is)
+    end
     
     num_vis_frames = length(is)
 
