@@ -174,10 +174,6 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             end
             print(io, "Use `err` to retrieve the full stack trace.")
         end
-    elseif num_frames > 1
-        println(io)
-        print_omitted_modules(1, num_frames - 1)
-        print(io, "Use `err` to retrieve the full stack trace.")
     end
 end
 
