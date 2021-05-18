@@ -130,7 +130,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             !is_broadcast(String(frame[1].file))
         end)
     end
-    sort!(union!(is, broadcasti))
+    sort!(union!(is, filter!(!isnothing, broadcasti)))
     
     if length(is) > 0 && is[end] == num_frames
         # remove REPL-based top-level
