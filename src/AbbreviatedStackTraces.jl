@@ -1,4 +1,5 @@
 module AbbreviatedStackTraces
+using Base: catch_stack
 __precompile__(false)
 
 import REPL:
@@ -296,8 +297,9 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ val]))
-                Base.invokelatest(display_error, errio, val, true)
+                exs = ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ val])
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, exs)
+                Base.invokelatest(display_error, errio, exs, true)
             else
                 if val !== nothing && show_value
                     try
@@ -318,7 +320,9 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, catch_stack())
+                    st = catch_stack()
+                    exs = ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ st])
+                    Base.invokelatest(Base.display_error, errio, exs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
