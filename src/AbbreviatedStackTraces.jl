@@ -42,6 +42,15 @@ import Base.StackTraces:
     show_spec_linfo,
     top_level_scope_sym
 
+
+if isdefined(Base, :ExceptionStack)
+    import Base.ExceptionStack
+else
+    struct ExceptionStack
+        stack
+    end
+end
+
 include("vscode.jl")
 
 is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
@@ -206,9 +215,9 @@ function display_error(io::IO, er, bt, compacttrace = false)
     showerror(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), er, bt; backtrace = bt!==nothing)
     println(io)
 end
-function display_error(io::IO, stack::Vector, compacttrace = false)
+function display_error(io::IO, exs::ExceptionStack, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    bt = Any[ (x.exception, scrub_repl_backtrace(x.backtrace)) for x in exs.stack ]
     show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), bt)
     println(io)
 end
@@ -264,22 +273,18 @@ function show_backtrace(io::IO, t::Vector)
     return
 end
 
-struct ExceptionInfo
-    errors::Vector{Tuple{Any, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}}}
-end
-
-show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
+show(io::IO, exs::ExceptionStack) = display_error(io, exs.stack)
 
 # copied from client.jl with added code to account for sysimages that are missing `eval`
 function scrub_repl_backtrace(bt)
-    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
-        bt = stacktrace(bt)
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
-        # some sysimages don't have `eval`, but do have `eval_user_input`
-        eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval_user_input, bt))
-        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
-    end
+    # if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
+    #     bt = stacktrace(bt)
+    #     # remove REPL-related frames from interactive printing
+    #     eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+    #     # some sysimages don't have `eval`, but do have `eval_user_input`
+    #     eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval_user_input, bt))
+    #     eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+    # end
     return bt
 end
 
@@ -291,7 +296,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, ExceptionInfo(val))
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ val]))
                 Base.invokelatest(display_error, errio, val, true)
             else
                 if val !== nothing && show_value
