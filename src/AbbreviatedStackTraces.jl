@@ -276,7 +276,7 @@ function show_backtrace(io::IO, t::Vector)
     return
 end
 
-show(io::IO, exs::ExceptionStack) = display_error(io, exs.stack)
+show(io::IO, exs::ExceptionStack) = display_error(io, exs)
 
 # copied from client.jl with added code to account for sysimages that are missing `eval`
 function scrub_repl_backtrace(bt)
