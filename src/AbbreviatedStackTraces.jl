@@ -280,14 +280,14 @@ show(io::IO, exs::ExceptionStack) = display_error(io, exs.stack)
 
 # copied from client.jl with added code to account for sysimages that are missing `eval`
 function scrub_repl_backtrace(bt)
-    # if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
-    #     bt = stacktrace(bt)
-    #     # remove REPL-related frames from interactive printing
-    #     eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
-    #     # some sysimages don't have `eval`, but do have `eval_user_input`
-    #     eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval_user_input, bt))
-    #     eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
-    # end
+    if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
+        bt = stacktrace(bt)
+        # remove REPL-related frames from interactive printing
+        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        # some sysimages don't have `eval`, but do have `eval_user_input`
+        eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval_user_input, bt))
+        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+    end
     return bt
 end
 
