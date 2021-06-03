@@ -45,8 +45,10 @@ import Base.StackTraces:
 
 
 if isdefined(Base, :ExceptionStack)
+    oldversion = false
     import Base.ExceptionStack
 else
+    oldversion = true
     struct ExceptionStack
         stack
     end
@@ -321,7 +323,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     st = catch_stack()
-                    exs = ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ st])
+                    exs = oldversion ? ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ st]) : st
                     Base.invokelatest(Base.display_error, errio, exs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
