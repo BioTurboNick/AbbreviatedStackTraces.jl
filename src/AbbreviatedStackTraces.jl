@@ -1,5 +1,4 @@
 module AbbreviatedStackTraces
-using Base: catch_stack
 __precompile__(false)
 
 import REPL:
@@ -7,7 +6,6 @@ import REPL:
 
 import Base:
     BIG_STACKTRACE_SIZE,
-    catch_stack,
     CodeInfo,
     contractuser,
     demangle_function_name,
@@ -49,9 +47,29 @@ if isdefined(Base, :ExceptionStack)
     import Base.ExceptionStack
 else
     oldversion = true
-    struct ExceptionStack
+    struct ExceptionStack <: AbstractArray{Any,1}
         stack
     end
+    function current_exceptions(task=current_task(); backtrace=true)
+        raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
+        formatted = Any[]
+        stride = backtrace ? 3 : 1
+        for i = reverse(1:stride:length(raw))
+            exc = raw[i]
+            bt = backtrace ? Base._reformat_bt(raw[i+1],raw[i+2]) : nothing
+            push!(formatted, (exception=exc,backtrace=bt))
+        end
+        ExceptionStack(formatted)
+    end
+    size(s::ExceptionStack) = size(s.stack)
+    getindex(s::ExceptionStack, i::Int) = s.stack[i]
+
+    function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
+        nexc = length(stack)
+        printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
+        show_exception_stack(io, stack)
+    end
+    show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
 end
 
 include("vscode.jl")
@@ -62,6 +80,56 @@ is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_stdlib(path) = contains(path, r"[/\\]julia[/\\]stdlib")
 is_private_not_julia(path) = contains(path, r"[/\\].*[/\\]") && !contains(path, r"[/\\].julia[/\\]")
 is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
+
+function find_external_frames(trace::Vector)
+    # select frames from user-controlled code
+    is = findall(trace) do frame
+        file = String(frame[1].file)
+        !is_base_not_repl(file) &&
+        !is_registry_pkg(file) &&
+        !is_stdlib(file) &&
+        !is_private_not_julia(file) ||
+        is_dev_pkg(file) ||
+        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
+    end
+
+    # get list of visible modules
+    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
+    Main ∈ visible_modules || push!(visible_modules, Main)
+
+    # find the highest contiguous internal frames evaluted in the context of a visible module
+    internali = setdiff!(findall(trace) do frame
+        parentmodule(frame[1]) ∈ visible_modules
+    end, is)
+    setdiff!(internali, internali .+ 1)
+
+    # include the next immediate hidden frame called into from user-controlled code
+    filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
+
+    # for each appearance of an already-visible `materialize` broadcast frame, include
+    # the next immediate hidden frame after the last `broadcast` frame
+    broadcasti = []
+    for i ∈ is
+        trace[i][1].func == :materialize || continue
+        push!(broadcasti, findlast(trace[1:i - 1]) do frame
+            !is_broadcast(String(frame[1].file))
+        end)
+    end
+    sort!(union!(is, filter!(!isnothing, broadcasti)))
+
+    if length(is) > 0 && is[end] == length(trace)
+        # remove REPL-based top-level
+        # note: file field for top-level is different from the rest, doesn't include ./
+        startswith(String(trace[end][1].file), "REPL") && pop!(is)
+    end
+
+    if length(is) == 1 && trace[only(is)][1].func == :materialize
+        # remove a materialize frame if it is the only visible frame
+        pop!(is)
+    end
+
+    return is
+end
 
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
@@ -109,52 +177,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         println(io)
     end
 
-    # select frames from user-controlled code
-    is = findall(trace) do frame
-        file = String(frame[1].file)
-        !is_base_not_repl(file) &&
-        !is_registry_pkg(file) &&
-        !is_stdlib(file) &&
-        !is_private_not_julia(file) ||
-        is_dev_pkg(file) ||
-        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
-    end
-
-    # get list of visible modules
-    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
-    Main ∈ visible_modules || push!(visible_modules, Main)
-
-    # find the highest contiguous internal frames evaluted in the context of a visible module
-    internali = setdiff!(findall(trace) do frame
-        parentmodule(frame[1]) ∈ visible_modules
-    end, is)
-    setdiff!(internali, internali .+ 1)
-
-    # include the next immediate hidden frame called into from user-controlled code
-    filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
-
-    # for each appearance of an already-visible `materialize` broadcast frame, include
-    # the next immediate hidden frame after the last `broadcast` frame
-    broadcasti = []
-    for i ∈ is
-        trace[i][1].func == :materialize || continue
-        push!(broadcasti, findlast(trace[1:i - 1]) do frame
-            !is_broadcast(String(frame[1].file))
-        end)
-    end
-    sort!(union!(is, filter!(!isnothing, broadcasti)))
-    
-    if length(is) > 0 && is[end] == num_frames
-        # remove REPL-based top-level
-        # note: file field for top-level is different from the rest, doesn't include ./
-        startswith(String(trace[end][1].file), "REPL") && pop!(is)
-    end
-
-    if length(is) == 1 && trace[only(is)][1].func == :materialize
-        # remove a materialize frame if it is the only visible frame
-        pop!(is)
-    end
-    
+    is = find_external_frames(trace)
     num_vis_frames = length(is)
 
     if num_vis_frames > 0
@@ -322,9 +345,9 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    st = catch_stack()
+                    st = current_exceptions()
                     exs = oldversion ? ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ st]) : st
-                    Base.invokelatest(Base.display_error, errio, exs)
+                    Base.invokelatest(Base.display_error, errio, current_exceptions())
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -334,7 +357,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
                 break
             end
-            val = catch_stack()
+            val = current_exceptions()
             iserr = true
         end
     end
