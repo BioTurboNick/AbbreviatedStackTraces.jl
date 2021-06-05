@@ -305,7 +305,8 @@ function show_exception_stack(io::IO, stack::ExceptionStack)
         if nexc != i
             printstyled(io, "\ncaused by: ", color=Base.error_color())
         end
-        showerror(io, stack[i].exception, stack[i].backtrace; backtrace = bt!==nothing)
+        bt = stack[i].backtrace
+        showerror(io, stack[i].exception, bt; backtrace = bt!==nothing)
         i == 1 || println(io)
     end
 end
