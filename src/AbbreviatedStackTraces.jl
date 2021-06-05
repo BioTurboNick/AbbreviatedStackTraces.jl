@@ -46,6 +46,9 @@ if isdefined(Base, :ExceptionStack)
     oldversion = false
     import Base.ExceptionStack
 else
+    import Base:
+        getindex,
+        size
     oldversion = true
     struct ExceptionStack <: AbstractArray{Any,1}
         stack
