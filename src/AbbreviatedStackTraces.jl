@@ -137,7 +137,6 @@ end
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
-    println(io, "got here 1")
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames) * 2 + 1
 
@@ -180,7 +179,6 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         println(io)
     end
 
-    println(io, "got here 2")
     # select frames from user-controlled code
     is = findall(trace) do frame
         file = String(frame[1].file)
@@ -228,7 +226,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
     
     num_vis_frames = length(is)
-    println(io, "got here 3 ")
+
     if num_vis_frames > 0
         println(io, "\nStacktrace:")
 
@@ -298,7 +296,7 @@ function display_error(io::IO, exs::ExceptionStack, compacttrace = false)
 end
 
 # copied from errorshow.jl with added compacttrace argument
-function show_exception_stack(io::IO, stack::Vector)
+function show_exception_stack(io::IO, stack::ExceptionStack)
     # Display exception stack with the top of the stack first.  This ordering
     # means that the user doesn't have to scroll up in the REPL to discover the
     # root cause.
@@ -307,8 +305,7 @@ function show_exception_stack(io::IO, stack::Vector)
         if nexc != i
             printstyled(io, "\ncaused by: ", color=Base.error_color())
         end
-        exc, bt = stack[i]
-        showerror(io, exc, bt; backtrace = bt!==nothing)
+        showerror(io, stack[i].exception, stack[i].backtrace; backtrace = bt!==nothing)
         i == 1 || println(io)
     end
 end
