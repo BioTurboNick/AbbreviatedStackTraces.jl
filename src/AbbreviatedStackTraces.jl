@@ -77,6 +77,8 @@ end
 
 include("vscode.jl")
 
+show(io::IO, ::MIME"text/plain", stack::ExceptionStack) = display_error(io, stack)
+
 is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
 is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
@@ -290,7 +292,7 @@ function display_error(io::IO, er, bt, compacttrace = false)
 end
 function display_error(io::IO, exs::ExceptionStack, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x.exception, scrub_repl_backtrace(x.backtrace)) for x in exs.stack ]
+    bt = Any[ (x.exception, scrub_repl_backtrace(x.backtrace)) for x in exs ]
     show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), bt)
     println(io)
 end
@@ -345,8 +347,6 @@ function show_backtrace(io::IO, t::Vector)
     end
     return
 end
-
-show(io::IO, exs::ExceptionStack) = display_error(io, exs)
 
 # copied from client.jl with added code to account for sysimages that are missing `eval`
 function scrub_repl_backtrace(bt)
