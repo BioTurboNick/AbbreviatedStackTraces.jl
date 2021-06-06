@@ -66,18 +66,19 @@ else
     end
     size(s::ExceptionStack) = size(s.stack)
     getindex(s::ExceptionStack, i::Int) = s.stack[i]
-
-    function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
-        nexc = length(stack)
-        printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
-        show_exception_stack(io, stack)
-    end
-    show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
 end
 
 include("vscode.jl")
 
-show(io::IO, ::MIME"text/plain", stack::ExceptionStack) = display_error(io, stack)
+show(io::IO, stack::ExceptionStack; kwargs...) = show(io, MIME("text/plain"), stack; kwargs...)
+function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frames = false)
+    nexc = length(stack)
+    printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
+    if !show_repl_frames
+        stack = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    end
+    show_exception_stack(io, stack)
+end
 
 is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
 is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
