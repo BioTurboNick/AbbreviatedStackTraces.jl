@@ -39,6 +39,7 @@ import Distributed:
 import Base.StackTraces:
     is_top_level_frame,
     show_spec_linfo,
+    stacktrace,
     top_level_scope_sym
 
 
@@ -75,7 +76,7 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frame
     nexc = length(stack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
     if !show_repl_frames
-        stack = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+        stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
     end
     show_exception_stack(io, stack)
 end
@@ -284,19 +285,18 @@ function showerror(io::IO, re::RemoteException)
     showerror(IOContext(io, :compacttrace => false), re.captured)
 end
 
+stacktrace(stack::Vector{StackFrame}) = stack
+
 # copied from client.jl with added compacttrace argument, and scrubing error frame
-function display_error(io::IO, er, bt, compacttrace = false)
+function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), er, bt; backtrace = bt!==nothing)
+    stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
+    istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
+    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
+    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), stack)
     println(io)
 end
-function display_error(io::IO, exs::ExceptionStack, compacttrace = false)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x.exception, scrub_repl_backtrace(x.backtrace)) for x in exs ]
-    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), bt)
-    println(io)
-end
+display_error(stack::ExceptionStack, compacttrace = false) = display_error(stderr, stack, compacttrace)
 
 # copied from errorshow.jl with added compacttrace argument
 function show_exception_stack(io::IO, stack::ExceptionStack)
@@ -370,8 +370,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
-                exs = ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ val])
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, exs)
+                exs = oldversion ? ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ val]) : val
                 Base.invokelatest(display_error, errio, exs, true)
             else
                 if val !== nothing && show_value
@@ -393,9 +392,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    st = current_exceptions()
-                    exs = oldversion ? ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ st]) : st
-                    Base.invokelatest(Base.display_error, errio, current_exceptions())
+                    Base.invokelatest(Base.display_error, errio, current_exceptions(), true)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -411,20 +408,6 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
     end
     Base.sigatomic_end()
     nothing
-end
-
-#copied from show.jl to fix, for some reason it wasn't working
-function demangle_function_name(name::AbstractString)
-    demangle = split(name, '#')
-    # kw sorters and impl methods use the name scheme `f#...`
-    if length(demangle) >= 2
-        if demangle[1] != ""
-            return demangle[1]
-        elseif demangle[2] != ""
-            return demangle[2]
-        end
-    end
-    return name
 end
 
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
