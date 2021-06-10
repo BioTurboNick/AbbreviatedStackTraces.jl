@@ -22,3 +22,16 @@ The global `err` variable stores the last error and can show the full, original 
 
 There is an optional minimal display available, accessed by setting `ENV["JULIA_STACKTRACE_MINIMAL"] = true`.
 ![image](https://user-images.githubusercontent.com/1438610/116329297-0b848080-a799-11eb-9d71-32650092b3a5.png)
+
+
+
+
+Here's an example a beginner might readily run into:
+![image](https://user-images.githubusercontent.com/1438610/121451945-8a5e0300-c96c-11eb-9070-d431b1cadc56.png)
+
+**Yikes!**
+
+With this package:
+![image](https://user-images.githubusercontent.com/1438610/121452028-b4172a00-c96c-11eb-961b-300cbcbf5ad9.png)
+
+**Much better!**
