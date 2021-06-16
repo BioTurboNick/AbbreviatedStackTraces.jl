@@ -96,13 +96,13 @@ function find_external_frames(trace::Vector)
         !is_registry_pkg(file) &&
         !is_stdlib(file) &&
         !is_private_not_julia(file) ||
+        parentmodule(frame[1]) == Main ||
         is_dev_pkg(file) ||
         (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
     end
 
     # get list of visible modules
     visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
-    Main ∈ visible_modules || push!(visible_modules, Main)
 
     # find the highest contiguous internal frames evaluted in the context of a visible module
     internali = setdiff!(findall(trace) do frame
