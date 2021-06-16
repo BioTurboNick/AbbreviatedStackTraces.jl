@@ -184,50 +184,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
 
     # select frames from user-controlled code
-    is = findall(trace) do frame
-        file = String(frame[1].file)
-        !is_base_not_repl(file) &&
-        !is_registry_pkg(file) &&
-        !is_stdlib(file) &&
-        !is_private_not_julia(file) ||
-        is_dev_pkg(file) ||
-        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
-    end
-
-    # get list of visible modules
-    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
-    Main ∈ visible_modules || push!(visible_modules, Main)
-
-    # find the highest contiguous internal frames evaluted in the context of a visible module
-    internali = setdiff!(findall(trace) do frame
-        parentmodule(frame[1]) ∈ visible_modules
-    end, is)
-    setdiff!(internali, internali .+ 1)
-
-    # include the next immediate hidden frame called into from user-controlled code
-    filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
-
-    # for each appearance of an already-visible `materialize` broadcast frame, include
-    # the next immediate hidden frame after the last `broadcast` frame
-    broadcasti = []
-    for i ∈ is
-        trace[i][1].func == :materialize || continue
-        push!(broadcasti, findlast(trace[1:i - 1]) do frame
-            !is_broadcast(String(frame[1].file))
-        end)
-    end
-    sort!(union!(is, filter!(!isnothing, broadcasti)))
-    
-    if length(is) > 0 && is[end] == num_frames
-        # remove REPL-based top-level
-        # note: file field for top-level is different from the rest, doesn't include ./
-        startswith(String(trace[end][1].file), "REPL") && pop!(is)
-    end
-
-    if length(is) == 1 && trace[only(is)][1].func == :materialize
-        # remove a materialize frame if it is the only visible frame
-        pop!(is)
-    end
+    is = find_external_frames(trace)
     
     num_vis_frames = length(is)
 
