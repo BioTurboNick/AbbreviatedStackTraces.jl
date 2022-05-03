@@ -73,6 +73,8 @@ else
     getindex(s::ExceptionStack, i::Int) = s.stack[i]
 end
 
+is_ide_support(path) = false # loaded early so it can be overwritten
+
 include("vscode.jl")
 VERSION < v"1.7-DEV" && include("pre17.jl")
 if VERSION ≥ v"1.8.0-DEV.1040"
@@ -140,28 +142,30 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frame
     show_exception_stack(io, stack)
 end
 
-is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
-is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
+is_repl(path) = startswith(path, r".[/\\]REPL")
+is_julia(path) = dirname(path) == "." || contains(path, r"[/\\].julia[/\\]") || contains(path, r"[/\\]julia[/\\]")
+#is_ide_support(path) = false # replaced by IDE environment, defined above so the VSCode one is loaded after
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
-is_stdlib(path) = contains(path, r"[/\\]julia[/\\]stdlib")
-is_private_not_julia(path) = contains(path, r"[/\\].*[/\\]") && !contains(path, r"[/\\].julia[/\\]")
 is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
 
 function find_external_frames(trace::Vector)
     # select frames from user-controlled code
+    # user-controlled code is:
+    #    - Code on the REPL
+    #    - Code outside ./, /.julia, or /julia, or a path provided by the IDE (e.g. /.vscode)
+    #    - Code inside /.julia/dev
     is = findall(trace) do frame
         file = String(frame[1].file)
-        !is_base_not_repl(file) &&
-        !is_registry_pkg(file) &&
-        !is_stdlib(file) &&
-        !is_private_not_julia(file) ||
-        parentmodule(frame[1]) == Main ||
+        is_repl(file) ||
+        !is_julia(file) ||
         is_dev_pkg(file) ||
+        is_ide_support(file) ||
         (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
     end
 
     # get list of visible modules
     visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
+    Main ∈ visible_modules || push!(visible_modules, Main)
 
     # find the highest contiguous internal frames evaluted in the context of a visible module
     internali = setdiff!(findall(trace) do frame
@@ -260,19 +264,17 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
                 print_omitted_modules(lasti + 1, i - 1)
             end
             print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
+            println(io)
             if i < num_frames - 1
-                println(io)
                 print_linebreaks && println(io)
             end
             lasti = i
         end
 
         # print if frames other than top-level were omitted
-        if num_frames - 1 > num_vis_frames
+        if num_frames - 1 > num_vis_frames 
             if lasti < num_frames - 1
                 print_omitted_modules(lasti + 1, num_frames - 1)
-            else
-                println(io)
             end
             print(io, "Use `err` to retrieve the full stack trace.")
         end

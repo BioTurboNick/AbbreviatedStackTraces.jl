@@ -5,6 +5,8 @@ try
             display_repl_error,
             unwrap_loaderror
         
+        is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
+
         function display_repl_error(io, err, bt)
             ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, AbbreviatedStackTraces.ExceptionStack([(exception = err, backtrace = bt)]))
             st = stacktrace(VSCodeServer.crop_backtrace(bt))
