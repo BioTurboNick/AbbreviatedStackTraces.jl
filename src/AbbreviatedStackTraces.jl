@@ -143,7 +143,7 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frame
 end
 
 is_repl(path) = startswith(path, r".[/\\]REPL")
-is_julia(path) = dirname(path) == "." || contains(path, r"[/\\].julia[/\\]") || contains(path, r"[/\\]julia[/\\]")
+is_julia(path) = startswith(path, r".[/\\]") || contains(path, r"[/\\].julia[/\\]") || contains(path, r"[/\\]julia[/\\]stdlib[/\\]")
 #is_ide_support(path) = false # replaced by IDE environment, defined above so the VSCode one is loaded after
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
