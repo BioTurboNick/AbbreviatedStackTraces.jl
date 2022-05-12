@@ -242,8 +242,6 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             length(modules) > 0 && print(io, ", ")
             printstyled(io, "Unknown", color = :light_black)
         end
-
-        println(io)
     end
 
     # select frames from user-controlled code
@@ -252,19 +250,21 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_vis_frames = length(is)
 
     if num_vis_frames > 0
-        println(io, "\nStacktrace:")
+        print(io, "\nStacktrace:")
 
         if is[1] > 1
+            println(io)
             print_omitted_modules(1, is[1] - 1)
         end
 
         lasti = first(is)
         @views for i ∈ is
             if i > lasti + 1
+                println(io)
                 print_omitted_modules(lasti + 1, i - 1)
             end
-            print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
             println(io)
+            print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
             if i < num_frames - 1
                 print_linebreaks && println(io)
             end
@@ -274,8 +274,10 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # print if frames other than top-level were omitted
         if num_frames - 1 > num_vis_frames 
             if lasti < num_frames - 1
+                println(io)
                 print_omitted_modules(lasti + 1, num_frames - 1)
             end
+            println(io)
             print(io, "Use `err` to retrieve the full stack trace.")
         end
     end
