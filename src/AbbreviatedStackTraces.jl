@@ -12,6 +12,7 @@ import Base:
     demangle_function_name,
     display_error,
     empty_sym,
+    fixup_stdlib_path,
     invokelatest,
     MethodInstance,
     printstyled,
