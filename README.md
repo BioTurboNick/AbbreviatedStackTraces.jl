@@ -2,7 +2,33 @@
 
 The goal of this is to demonstrate an improvement to the display of stack traces in the Julia REPL, associated with this PR: https://github.com/JuliaLang/julia/pull/40537
 
-Chaining packages together, or particularly complex packages, can produce some nasty stack traces that fill the screen. This is a barrier to entry using Julia and can get in the way generally.
+## Rationale
+
+Julia's stacktraces are often too long to be practical for most users. This can form a barrier to entry and become an annoyance.
+
+So how can we maximize the utility of the stack traces for the common case?
+
+My philosophy is this: 95% of the time, a given exception is due to a mistake in your own code. The probability of the exception being due to a mistake in a well-used dependency is much lower, and the probability of the exception being due to a mistake in Base is even smaller. The probability of an exception being due to a mistake in the compiler is infinitesimal (but nonzero).
+
+Thus, the highest value stack frames, the majority of the time, are those relating to code you have written or are actively developing. The stack frames between your call into a foreign method and the frame where the validation occurs is usually irrelevant to you. And for composed functions, the internal frames between the call into a foreign function and where it emerges back into your code also doesn't usually matter. Those frames are implementation details that don't make a difference to whether *your* code works.
+
+Which raised the question: what counts as "your" code?
+
+I think clearly these sources can be assumed to not be your code, and more likely stable:
+ - Julia Base
+ - Julia Stdlibs
+ - Dependencies acquired using Pkg `add`
+
+Whereas these sources are "yours":
+ - Activated local package
+ - Code defined in the REPL
+ - Dependencies acquired using Pkg `dev`
+
+All frames originating from "your" code are shown by default, as well as the immediate next frame to show what function your code called. This information should be sufficient in most cases to understand that you made a mistake, and where that mistake was located.
+
+But in the rarer case where the issue was *not* in your code, the full trace can be retrieved from the `err` global variable.
+
+## Examples
 
 Here's an example of a stack trace by chaining BenchmarkTools and Plots:
 
