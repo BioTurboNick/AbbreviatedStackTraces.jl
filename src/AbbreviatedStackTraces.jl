@@ -26,6 +26,7 @@ import Base:
     show_datatype,
     show_exception_stack,
     show_full_backtrace,
+    show_reduced_backtrace,
     show_tuple_as_call,
     show_type_name,
     StackFrame,
