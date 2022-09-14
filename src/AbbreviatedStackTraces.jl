@@ -363,7 +363,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    if get(io, :compacttrace, false)
+    if get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
         show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     else
         show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
