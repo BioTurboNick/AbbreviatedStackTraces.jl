@@ -23,6 +23,7 @@ Whereas these sources are "yours":
  - Activated local package
  - Code defined in the REPL
  - Dependencies acquired using Pkg `dev`
+ - Modules or files matching `ENV["JULIA_DEBUG"]` (file basename and/or module names; comma-separated, `!` to exclude)
 
 All frames originating from "your" code are shown by default, as well as the immediate next frame to show what function your code called. This information should be sufficient in most cases to understand that you made a mistake, and where that mistake was located.
 

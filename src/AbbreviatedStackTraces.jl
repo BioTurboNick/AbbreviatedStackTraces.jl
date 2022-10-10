@@ -149,6 +149,7 @@ is_julia(path) = startswith(path, r".[/\\]") || contains(path, r"[/\\].julia[/\\
 #is_ide_support(path) = false # replaced by IDE environment, defined above so the VSCode one is loaded after
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
+is_debug_included(v, included, excluded) = v ∉ excluded && v ∈ included
 
 function find_external_frames(trace::Vector)
     # select frames from user-controlled code
@@ -156,13 +157,19 @@ function find_external_frames(trace::Vector)
     #    - Code on the REPL
     #    - Code outside ./, /.julia, or /julia, or a path provided by the IDE (e.g. /.vscode)
     #    - Code inside /.julia/dev
+    #    - Modules or file base names indicated by `ENV["JULIA_DEBUG"]`
+    debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
+    debug_include = filter(x -> !startswith(x, "!"), debug_entries)
+    debug_exclude = lstrip.(filter!(x -> startswith(x, "!"), debug_entries), '!')
+
     is = findall(trace) do frame
         file = String(frame[1].file)
-        is_repl(file) ||
-        !is_julia(file) ||
-        is_dev_pkg(file) ||
-        is_ide_support(file) ||
-        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
+        return is_repl(file) ||
+            !is_julia(file) ||
+            is_dev_pkg(file) ||
+            is_ide_support(file) ||
+            (is_top_level_frame(frame[1]) && startswith(file, "REPL")) ||
+            is_debug_included(frame[1] |> parentmodule |> string, debug_include, debug_exclude)
     end
 
     # get list of visible modules
@@ -174,6 +181,17 @@ function find_external_frames(trace::Vector)
         parentmodule(frame[1]) ∈ visible_modules
     end, is)
     setdiff!(internali, internali .+ 1)
+    
+    # add or remove any files specified by `ENV["JULIA_DEBUG"]`
+    fileincludes = findall(trace) do frame
+        file = String(frame[1].file)
+        return file |> basename |> splitext |> first ∈ debug_include
+    end
+    fileexcludes = findall(trace) do frame
+        file = String(frame[1].file)
+        return file |> basename |> splitext |> first ∈ debug_exclude
+    end
+    sort!(setdiff!(union!(is, fileincludes), fileexcludes))
 
     # include the next immediate hidden frame called into from user-controlled code
     filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
