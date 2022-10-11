@@ -144,81 +144,85 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frame
     show_exception_stack(io, stack)
 end
 
-is_repl(path) = startswith(path, r".[/\\]REPL")
-is_julia(path) = startswith(path, r".[/\\]") || contains(path, r"[/\\].julia[/\\]") || contains(path, r"[/\\]julia[/\\]stdlib[/\\]")
+is_repl(path) = startswith(path, r"(.[/\\])?REPL")
+is_julia_dev(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
+is_julia(path) =
+    (startswith(path, r".[/\\]") && !is_repl(path)) ||
+    (contains(path, r"[/\\].julia[/\\]") && !is_julia_dev(path)) ||
+    contains(path, r"[/\\]julia[/\\]stdlib[/\\]")
 #is_ide_support(path) = false # replaced by IDE environment, defined above so the VSCode one is loaded after
-is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
-is_debug_included(v, included, excluded) = v ∉ excluded && v ∈ included
 
-function find_external_frames(trace::Vector)
-    # select frames from user-controlled code
-    # user-controlled code is:
-    #    - Code on the REPL
-    #    - Code outside ./, /.julia, or /julia, or a path provided by the IDE (e.g. /.vscode)
-    #    - Code inside /.julia/dev
-    #    - Modules or file base names indicated by `ENV["JULIA_DEBUG"]`
+# Process of identifying a visible frame:
+# 1. Identify modules that should be included:
+#     - Include: All modules observed in backtrace
+#     - Exclude: Modules in Julia Base files, StdLibs, added packages, or registered by an IDE.
+#     - Include: Modules in ENV["JULIA_DEBUG"]
+#     - Exclude: Modules in ENV["JULIA_DEBUG"] that lead with `!`
+# 2. Identify all frames in included modules
+# 3. Include frames that have a file name matching ENV["JULIA_DEBUG"]
+# 4. Exclude frames that have a file name matching ENV["JULIA_DEBUG"] that lead with `!`
+# 5. This set of frames is considered user code.
+# 6. Include the first frame above each contiguous set of user code frames to show what the user code called into.
+# 7. To support broadcasting, identify any visible `materialize` frames, and include the first frame after
+#    the broadcast functions, to show what function is being broadcast.
+# 8. Remove the topmost frame if it's a REPL toplevel.
+# 9. Remove a broadcast materialize frame if it's the topmost frame.
+function find_visible_frames(trace::Vector)
+    user_frames_i = findall(trace) do frame
+        file = String(frame[1].file)
+        !is_julia(file) && !is_ide_support(file)
+    end
+
+    # construct set of visible modules
+    all_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ trace)))
+    user_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[user_frames_i])))
+    Main ∈ user_modules || push!(user_modules, Main)
+
     debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
     debug_include = filter(x -> !startswith(x, "!"), debug_entries)
     debug_exclude = lstrip.(filter!(x -> startswith(x, "!"), debug_entries), '!')
 
-    is = findall(trace) do frame
+    debug_include_modules = filter(m -> string(m) ∈ debug_include, all_modules)
+    debug_exclude_modules = filter(m -> string(m) ∈ debug_exclude, all_modules)
+    setdiff!(union!(user_modules, debug_include_modules), debug_exclude_modules)
+
+    # construct set of visible frames
+    visible_frames_i = findall(trace) do frame
         file = String(frame[1].file)
-        return is_repl(file) ||
-            !is_julia(file) ||
-            is_dev_pkg(file) ||
-            is_ide_support(file) ||
-            (is_top_level_frame(frame[1]) && startswith(file, "REPL")) ||
-            is_debug_included(frame[1] |> parentmodule |> string, debug_include, debug_exclude)
+        filenamebase = file |> basename |> splitext |> first
+        mod = parentmodule(frame[1])
+        return (mod ∈ user_modules || filenamebase ∈ debug_include) &&
+            !(filenamebase ∈ debug_exclude) ||
+            is_top_level_frame(frame[1]) && is_repl(file)
     end
 
-    # get list of visible modules
-    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
-    Main ∈ visible_modules || push!(visible_modules, Main)
-
-    # find the highest contiguous internal frames evaluted in the context of a visible module
-    internali = setdiff!(findall(trace) do frame
-        parentmodule(frame[1]) ∈ visible_modules
-    end, is)
-    setdiff!(internali, internali .+ 1)
-    
-    # add or remove any files specified by `ENV["JULIA_DEBUG"]`
-    fileincludes = findall(trace) do frame
-        file = String(frame[1].file)
-        return file |> basename |> splitext |> first ∈ debug_include
-    end
-    fileexcludes = findall(trace) do frame
-        file = String(frame[1].file)
-        return file |> basename |> splitext |> first ∈ debug_exclude
-    end
-    sort!(setdiff!(union!(is, fileincludes), fileexcludes))
-
-    # include the next immediate hidden frame called into from user-controlled code
-    filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
+    # add one additional frame above each contiguous set of user code frames, removing 0.
+    filter!(>(0), sort!(union!(visible_frames_i, visible_frames_i .- 1)))
 
     # for each appearance of an already-visible `materialize` broadcast frame, include
     # the next immediate hidden frame after the last `broadcast` frame
     broadcasti = []
-    for i ∈ is
+    for i ∈ visible_frames_i
         trace[i][1].func == :materialize || continue
         push!(broadcasti, findlast(trace[1:i - 1]) do frame
             !is_broadcast(String(frame[1].file))
         end)
     end
-    sort!(union!(is, filter!(!isnothing, broadcasti)))
+    sort!(union!(visible_frames_i, filter!(!isnothing, broadcasti)))
 
-    if length(is) > 0 && is[end] == length(trace)
+    if length(visible_frames_i) > 0 && visible_frames_i[end] == length(trace)
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
-        startswith(String(trace[end][1].file), "REPL") && pop!(is)
+        startswith(String(trace[end][1].file), "REPL") && pop!(visible_frames_i)
     end
 
-    if length(is) == 1 && trace[only(is)][1].func == :materialize
+    if length(visible_frames_i) == 1 && trace[only(visible_frames_i)][1].func == :materialize
         # remove a materialize frame if it is the only visible frame
-        pop!(is)
+        pop!(visible_frames_i)
     end
 
-    return is
+    return visible_frames_i
 end
 
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
@@ -265,7 +269,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
 
     # select frames from user-controlled code
-    is = find_external_frames(trace)
+    is = find_visible_frames(trace)
     
     num_vis_frames = length(is)
 
