@@ -118,7 +118,7 @@ if VERSION ≥ v"1.8.0-DEV.1040"
                         # at this point, only print the name of the type as a Symbol to
                         # minimize the possibility of further errors.
                         println(errio)
-                        println(errio, "SYSTEM (REPL): caught exception of type ", typeof(e).name.name,
+                        println(errio, "SYSTEM (REPL): caught exception of type ", nameof(typeof(e)),
                                 " while trying to handle a nested exception; giving up")
                     end
                     break
