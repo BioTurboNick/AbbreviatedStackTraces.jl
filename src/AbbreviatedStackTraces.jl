@@ -334,9 +334,6 @@ stacktrace(stack::Vector{StackFrame}) = stack
 # copied from client.jl with added compacttrace argument, and scrubing error frame
 function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
-    istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
-    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
     show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), stack)
     println(io)
 end
