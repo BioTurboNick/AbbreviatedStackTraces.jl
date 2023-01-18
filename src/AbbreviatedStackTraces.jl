@@ -194,7 +194,8 @@ function find_visible_frames(trace::Vector)
         mod = parentmodule(frame[1])
         return (mod ∈ user_modules || filenamebase ∈ debug_include) &&
             !(filenamebase ∈ debug_exclude) ||
-            is_top_level_frame(frame[1]) && is_repl(file)
+            is_top_level_frame(frame[1]) && is_repl(file) ||
+            !is_julia(file) && !is_ide_support(file)
     end
 
     # add one additional frame above each contiguous set of user code frames, removing 0.
