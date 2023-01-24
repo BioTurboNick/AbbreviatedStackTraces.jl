@@ -38,7 +38,7 @@ But in the rarer case where the issue was *not* in your code, the full trace can
 Here's an example of a stack trace by chaining BenchmarkTools and Plots:
 
 ```
-]add https://github.com/BioTurboNick/AbbreviatedStackTraces.jl # to install (not in registry)
+]add AbbreviatedStackTraces
 using AbbreviatedStackTraces # over-writes error-related `Base` methods
 using BenchmarkTools, Plots
 @btime plot([1,2,3], seriestype=:blah)
