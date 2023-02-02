@@ -5,6 +5,12 @@ try
             display_repl_error,
             unwrap_loaderror
         
+        import Base:
+            showerror
+
+        import Base.StackTraces:
+            stacktrace
+
         is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
 
         function display_repl_error(io, err, bt)
