@@ -77,7 +77,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
 
-    if !(get(io, :compacttrace, false) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))) #get(io, :minimaltrace, false))
+    if !((get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))) #get(io, :minimaltrace, false))
         println(io)
         print(io, " " ^ (digit_align_width + 1))
     end
