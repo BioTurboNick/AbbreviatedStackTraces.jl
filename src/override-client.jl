@@ -2,7 +2,8 @@ import Base:
     display_error,
     printstyled,
     scrub_repl_backtrace,
-    show_exception_stack
+    show_exception_stack,
+    stacktrace
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
