@@ -11,8 +11,8 @@ import Base:
     STACKTRACE_MODULECOLORS
 
 import Base.StackTraces:
-    is_top_level_frame
-
+    is_top_level_frame,
+    stacktrace
 
 is_ide_support(path) = false # replacable by IDE environment
 is_repl(path) = startswith(path, r"(.[/\\])?REPL")
