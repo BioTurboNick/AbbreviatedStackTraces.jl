@@ -1,5 +1,4 @@
 module AbbreviatedStackTraces
-__precompile__(false)
 
 import Base:
     printstyled,
@@ -22,18 +21,6 @@ is_julia(path) =
     (contains(path, r"[/\\].julia[/\\]") && !is_julia_dev(path)) ||
     contains(path, r"[/\\]julia[/\\]stdlib[/\\]")
 is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
-
-
-include("override-vscode.jl")
-
-include("override-error.jl") # sets const `oldversion = true` if ExceptionStack wasn't defined by Base
-include("override-client.jl")
-include("override-errorshow.jl")
-include("override-show.jl")
-include("override-stacktraces.jl")
-include("override-REPL.jl")
-include("override-Distributed-process_messages.jl")
-
 
 # Process of identifying a visible frame:
 # 1. Identify modules that should be included:
@@ -207,5 +194,17 @@ function get_modulecolor!(modulecolordict, m, modulecolorcycler)
 end
 
 stacktrace(stack::Vector{StackFrame}) = stack
+
+function __init__()
+    # necessary to do here to avoid precompilation warnings
+    include(joinpath(@__DIR__, "override-vscode.jl"))
+    include(joinpath(@__DIR__, "override-error.jl")) # sets const `oldversion = true` if ExceptionStack wasn't defined by Base
+    include(joinpath(@__DIR__, "override-client.jl"))
+    include(joinpath(@__DIR__, "override-errorshow.jl"))
+    include(joinpath(@__DIR__, "override-show.jl"))
+    include(joinpath(@__DIR__, "override-stacktraces.jl"))
+    include(joinpath(@__DIR__, "override-REPL.jl"))
+    include(joinpath(@__DIR__, "override-Distributed-process_messages.jl"))
+end
 
 end
