@@ -11,7 +11,6 @@ include("override-Distributed-process_messages.jl")
 
 import Base:
     printstyled,
-    print_stackframe,
     StackFrame,
     stacktrace_contract_userdir,
     stacktrace_expand_basepaths,
@@ -170,7 +169,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
                 print_omitted_modules(lasti + 1, i - 1)
             end
             println(io)
-            print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
+            Base.print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
             if i < num_frames - 1
                 print_linebreaks && println(io)
             end
