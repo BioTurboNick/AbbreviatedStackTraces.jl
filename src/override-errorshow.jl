@@ -55,11 +55,8 @@ function show_backtrace(io::IO, t::Vector)
     return
 end
 
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
-    file = fixup_stdlib_path(file)
-    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -70,8 +67,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     inlined = getfield(frame, :inlined)
     modul = parentmodule(frame)
 
+    digit_align_width = ndigits_max + 2
+
     # frame number
-    print(io, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
@@ -79,38 +78,34 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
 
-    if !((get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))) #get(io, :minimaltrace, false))
-        println(io)
-        print(io, " " ^ (digit_align_width + 1))
-    end
-
-    # @
-    printstyled(io, " " * "@ ", color = :light_black)
-
-    # module
-    if modul !== nothing
-        printstyled(io, modul, color = modulecolor)
-        print(io, " ")
-    end
-
-    # filepath
-    pathparts = splitpath(file)
-    folderparts = pathparts[1:end-1]
-    if !isempty(folderparts)
-        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
-    end
-
-    # filename, separator, line
-    # use escape codes for formatting, printstyled can't do underlined and color
-    # codes are bright black (90) and underlined (4)
-    if VERSION ≥ v"1.7-DEV"
-        printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
-    else
-        printstyled(io, pathparts[end], ":", line; color = :light_black)
-    end
+    # @ Module path / file : line
+    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+if VERSION < v"1.9"
+    function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+        printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
+    
+        # module
+        if modul !== nothing && modulecolor !== nothing
+            print(io, " ")
+            printstyled(io, modul, color = modulecolor)
+        end
+    
+        # filepath
+        file = fixup_stdlib_path(file)
+        stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+        stacktrace_contract_userdir() && (file = contractuser(file))
+        print(io, " ")
+        dir = dirname(file)
+        !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
+    
+        # filename, separator, line
+        printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    end
 end
 
 function show_exception_stack(io::IO, stack::ExceptionStack)
