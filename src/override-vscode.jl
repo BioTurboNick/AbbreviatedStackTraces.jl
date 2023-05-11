@@ -1,3 +1,5 @@
+__precompile__(false)
+
 try
     @eval Main begin
         import .VSCodeServer:

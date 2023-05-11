@@ -1,3 +1,5 @@
+__precompile__(false)
+
 import Base:
     CodeInfo,
     empty_sym,

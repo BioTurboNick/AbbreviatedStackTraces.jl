@@ -1,3 +1,5 @@
+__precompile__(false)
+
 import Base:
     display_error,
     printstyled,

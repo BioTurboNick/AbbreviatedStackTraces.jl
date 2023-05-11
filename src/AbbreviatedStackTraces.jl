@@ -1,5 +1,14 @@
 module AbbreviatedStackTraces
 
+include("override-vscode.jl")
+include("override-error.jl") # sets const `oldversion = true` if ExceptionStack wasn't defined by Base
+include("override-client.jl")
+include("override-errorshow.jl")
+include("override-show.jl")
+include("override-stacktraces.jl")
+include("override-REPL.jl")
+include("override-Distributed-process_messages.jl")
+
 import Base:
     printstyled,
     print_stackframe,
@@ -194,17 +203,5 @@ function get_modulecolor!(modulecolordict, m, modulecolorcycler)
 end
 
 stacktrace(stack::Vector{StackFrame}) = stack
-
-function __init__()
-    # necessary to do here to avoid precompilation warnings
-    include(joinpath(@__DIR__, "override-vscode.jl"))
-    include(joinpath(@__DIR__, "override-error.jl")) # sets const `oldversion = true` if ExceptionStack wasn't defined by Base
-    include(joinpath(@__DIR__, "override-client.jl"))
-    include(joinpath(@__DIR__, "override-errorshow.jl"))
-    include(joinpath(@__DIR__, "override-show.jl"))
-    include(joinpath(@__DIR__, "override-stacktraces.jl"))
-    include(joinpath(@__DIR__, "override-REPL.jl"))
-    include(joinpath(@__DIR__, "override-Distributed-process_messages.jl"))
-end
 
 end

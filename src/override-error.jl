@@ -1,3 +1,5 @@
+__precompile__(false)
+
 if isdefined(Base, :ExceptionStack)
 
     const oldversion = false
