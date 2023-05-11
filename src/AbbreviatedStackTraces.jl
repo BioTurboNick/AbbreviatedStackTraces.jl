@@ -79,6 +79,9 @@ function find_visible_frames(trace::Vector)
     # add one additional frame above each contiguous set of user code frames, removing 0.
     filter!(>(0), sort!(union!(visible_frames_i, visible_frames_i .- 1)))
 
+    # remove Main frames that originate from internal code (e.g. BenchmarkTools)
+    filter!(i -> parentmodule(trace[i][1]) != Main || !is_julia(string(trace[i][1].file)), visible_frames_i)
+
     # for each appearance of an already-visible `materialize` broadcast frame, include
     # the next immediate hidden frame after the last `broadcast` frame
     broadcasti = []
