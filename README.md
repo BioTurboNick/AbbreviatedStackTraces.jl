@@ -25,7 +25,7 @@ Whereas these sources are "yours":
  - Dependencies acquired using Pkg `dev`
  - Modules or files matching `ENV["JULIA_DEBUG"]` (file basename and/or module names; comma-separated, `!` to exclude)
 
-All frames originating from "your" code are shown by default, as well as the immediate next frame to show what function your code called. This information should be sufficient in most cases to understand that you made a mistake, and where that mistake was located.
+All frames originating from "your" code are shown by default, as well as the immediate next frame to show what function your code called. This information should be sufficient in most cases to understand that you made a mistake, and where that mistake was located. Note that if you run tests (e.g. via `pkg>test`) on "your" code, that full stack traces will be shown and this can be customized via the [options](#options) below.
 
 But in the rarer case where the issue was *not* in your code, the full trace can be retrieved from the `err` global variable.
 
