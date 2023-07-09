@@ -13,6 +13,7 @@ if VERSION < v"1.8.0-DEV.1040"
                 Base.sigatomic_end()
                 if iserr
                     exs = oldversion ? ExceptionStack([(exception = v[1], backtrace = v[2]) for v ∈ val]) : val
+                    ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, exs)
                     Base.invokelatest(display_error, errio, exs, true)
                 else
                     if val !== nothing && show_value
@@ -34,7 +35,9 @@ if VERSION < v"1.8.0-DEV.1040"
                     println(errio) # an error during printing is likely to leave us mid-line
                     println(errio, "SYSTEM (REPL): showing an error caused an error")
                     try
-                        Base.invokelatest(Base.display_error, errio, current_exceptions(), true)
+                        excs = current_exceptions()
+                        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, excs)
+                        Base.invokelatest(Base.display_error, errio, excs, true)
                     catch e
                         # at this point, only print the name of the type as a Symbol to
                         # minimize the possibility of further errors.
@@ -105,6 +108,8 @@ elseif VERSION < v"1.9"
     end
     
 else
+    import Base:
+        MainInclude
     
     function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
         Base.sigatomic_begin()
@@ -114,7 +119,7 @@ else
                 Base.sigatomic_end()
                 if iserr
                     val = Base.scrub_repl_backtrace(val)
-                    Base.istrivialerror(val) || setglobal!(Main, :err, val)
+                    Base.istrivialerror(val) || setglobal!(MainInclude, :err, val)
                     Base.invokelatest(Base.display_error, errio, val, true)
                 else
                     if val !== nothing && show_value
@@ -137,7 +142,7 @@ else
                     println(errio, "SYSTEM (REPL): showing an error caused an error")
                     try
                         excs = Base.scrub_repl_backtrace(current_exceptions())
-                        setglobal!(Main, :err, excs)
+                        setglobal!(MainInclude, :err, excs)
                         Base.invokelatest(Base.display_error, errio, excs)
                     catch e
                         # at this point, only print the name of the type as a Symbol to
