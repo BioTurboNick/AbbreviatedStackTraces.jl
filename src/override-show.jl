@@ -3,6 +3,7 @@ __precompile__(false)
 import Core:
     SimpleVector
 
+# Simple truncation of types for stack traces before Julia v1.10
 if VERSION < v"1.7-DEV"
     import Base:
         show_datatype,
@@ -40,7 +41,7 @@ if VERSION < v"1.7-DEV"
             end
         end
     end
-else
+elseif VERSION < v"1.10-alpha1"
     import Base:
         isgensym,
         show_can_elide,
