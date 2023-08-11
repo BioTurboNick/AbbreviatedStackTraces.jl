@@ -119,7 +119,11 @@ else
                 Base.sigatomic_end()
                 if iserr
                     val = Base.scrub_repl_backtrace(val)
-                    Base.istrivialerror(val) || setglobal!(MainInclude, :err, val)
+                    if VERSION < v"1.10-alpha1"
+                        Base.istrivialerror(val) || setglobal!(Main, :err, val)
+                    else
+                        Base.istrivialerror(val) || setglobal!(MainInclude, :err, val)
+                    end
                     Base.invokelatest(Base.display_error, errio, val, true)
                 else
                     if val !== nothing && show_value
@@ -142,7 +146,11 @@ else
                     println(errio, "SYSTEM (REPL): showing an error caused an error")
                     try
                         excs = Base.scrub_repl_backtrace(current_exceptions())
-                        setglobal!(MainInclude, :err, excs)
+                        if VERSION < v"1.10-alpha1"
+                            setglobal!(Main, :err, excs)
+                        else
+                            setglobal!(MainInclude, :err, excs)
+                        end
                         Base.invokelatest(Base.display_error, errio, excs)
                     catch e
                         # at this point, only print the name of the type as a Symbol to
