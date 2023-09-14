@@ -1,6 +1,11 @@
 __precompile__(false)
 
 try
+    if isdefined(Main, :VSCodeServer)
+        @eval (@__MODULE__) begin
+            is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
+        end
+    end
     @eval Main begin
         import .VSCodeServer:
             crop_backtrace,
@@ -12,8 +17,6 @@ try
 
         import Base.StackTraces:
             stacktrace
-
-        is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
 
         function display_repl_error(io, err, bt)
             ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, AbbreviatedStackTraces.ExceptionStack([(exception = err, backtrace = bt)]))

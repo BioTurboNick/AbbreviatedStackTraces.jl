@@ -21,7 +21,9 @@ import Base.StackTraces:
     is_top_level_frame,
     stacktrace
 
-is_ide_support(path) = false # replacable by IDE environment
+if !isdefined(@__MODULE__, :is_ide_support)
+    is_ide_support(path) = false # fallback if not defined
+end
 is_repl(path) = startswith(path, r"(.[/\\])?REPL")
 is_julia_dev(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_julia(path) =
