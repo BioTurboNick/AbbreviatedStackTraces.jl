@@ -108,6 +108,77 @@ function find_visible_frames(trace::Vector)
     return visible_frames_i
 end
 
+function find_visible_frames_public(trace::Vector)
+    public_frames_i = findall(trace) do frame
+        framemodule = parentmodule(frame[1])
+        framemodule === nothing && return false
+        module_public_names = names(framemodule)
+        frame[1].func ∈ module_public_names
+    end
+
+    user_frames_i = findall(trace) do frame
+        file = String(frame[1].file)
+        !is_julia(file) && !is_ide_support(file)
+    end
+
+    # construct set of visible modules
+    all_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ trace)))
+    user_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[user_frames_i])))
+    Main ∈ user_modules || push!(user_modules, Main)
+
+    debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
+    debug_include = filter(x -> !startswith(x, "!"), debug_entries)
+    debug_exclude = lstrip.(filter!(x -> startswith(x, "!"), debug_entries), '!')
+
+    debug_include_modules = filter(m -> string(m) ∈ debug_include, all_modules)
+    debug_exclude_modules = filter(m -> string(m) ∈ debug_exclude, all_modules)
+    setdiff!(union!(user_modules, debug_include_modules), debug_exclude_modules)
+
+    # construct set of visible frames
+    visible_frames_i = findall(trace) do frame
+        file = String(frame[1].file)
+        filenamebase = file |> basename |> splitext |> first
+        mod = parentmodule(frame[1])
+        return (mod ∈ user_modules || filenamebase ∈ debug_include) &&
+            !(filenamebase ∈ debug_exclude) ||
+            is_top_level_frame(frame[1]) && is_repl(file) ||
+            !is_julia(file) && !is_ide_support(file)
+    end
+
+    # add one additional frame above each contiguous set of user code frames, removing 0.
+    filter!(>(0), sort!(union!(visible_frames_i, visible_frames_i .- 1)))
+
+    # remove Main frames that originate from internal code (e.g. BenchmarkTools)
+    filter!(i -> parentmodule(trace[i][1]) != Main || !is_julia(string(trace[i][1].file)), visible_frames_i)
+
+    # for each appearance of an already-visible `materialize` broadcast frame, include
+    # the next immediate hidden frame after the last `broadcast` frame
+    broadcasti = []
+    for i ∈ visible_frames_i
+        trace[i][1].func == :materialize || continue
+        push!(broadcasti, findlast(trace[1:i - 1]) do frame
+            !is_broadcast(String(frame[1].file))
+        end)
+    end
+    sort!(union!(visible_frames_i, filter!(!isnothing, broadcasti)))
+
+    # add back public frames
+    sort!(union!(visible_frames_i, public_frames_i))
+
+    if length(visible_frames_i) > 0 && visible_frames_i[end] == length(trace)
+        # remove REPL-based top-level
+        # note: file field for top-level is different from the rest, doesn't include ./
+        startswith(String(trace[end][1].file), "REPL") && pop!(visible_frames_i)
+    end
+
+    if length(visible_frames_i) == 1 && trace[only(visible_frames_i)][1].func == :materialize
+        # remove a materialize frame if it is the only visible frame
+        pop!(visible_frames_i)
+    end
+
+    return visible_frames_i
+end
+
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
@@ -152,7 +223,11 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
 
     # select frames from user-controlled code
-    is = find_visible_frames(trace)
+    if VERSION >= v"1.11.0-DEV.511"
+        is = parse(Bool, get(ENV, "JULIA_STACKTRACE_PUBLIC", "true")) ? find_visible_frames_public(trace) : find_visible_frames(trace)
+    else
+        is = find_visible_frames(trace)
+    end
     
     num_vis_frames = length(is)
 
