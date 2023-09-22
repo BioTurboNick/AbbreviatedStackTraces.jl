@@ -209,19 +209,22 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
                 modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
                 if VERSION ≥ v"1.10"
                     printstyled(io, m, color = modulecolor, italic=true)
+                    i < length(modules) && printstyled(io, ", ", color = :light_black, italic=true)
                 else
                     printstyled(io, m, color = modulecolor)
+                    i < length(modules) && printstyled(io, ", ", color = :light_black)
                 end
-                i < length(modules) && print(io, ", ")
+                
             end
         end
         # indicate presence of inlined methods which lack module information
         # (they all do right now)
         if any(isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
-            length(modules) > 0 && print(io, ", ")
             if VERSION ≥ v"1.10"
+                length(modules) > 0 && printstyled(io, ", ", color = :light_black, italic=true)
                 printstyled(io, "Unknown", color = :light_black, italic=true)
             else
+                length(modules) > 0 && printstyled(io, ", ", color = :light_black)
                 printstyled(io, "Unknown", color = :light_black)
             end
         end
