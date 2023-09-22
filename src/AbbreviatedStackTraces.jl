@@ -219,7 +219,11 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # (they all do right now)
         if any(isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
             length(modules) > 0 && print(io, ", ")
-            printstyled(io, "Unknown", color = :light_black)
+            if VERSION ≥ v"1.10"
+                printstyled(io, "Unknown", color = :light_black, italic=true)
+            else
+                printstyled(io, "Unknown", color = :light_black)
+            end
         end
     end
 
