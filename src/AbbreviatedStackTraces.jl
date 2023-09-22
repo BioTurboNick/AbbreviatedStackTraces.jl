@@ -183,7 +183,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
     num_frames = length(trace)
-    ndigits_max = ndigits(num_frames) * 2 + 1
+    ndigits_max = ndigits(num_frames)
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
@@ -191,26 +191,27 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
-        if i < j
-            print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
-            print(io, "[" * string(i) * "-" * string(j) * "] ")
-        else
-            print(io, " " ^ (ndigits_max - ndigits(i) + 1))
-            print(io, "[" * string(i) * "] ")
-        end
+        print(io, " " ^ (ndigits_max + 2))
         printstyled(io, "⋮ ", bold = true)
-        printstyled(io, "internal", color = :light_black)
-        if !parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
-            println(io)
-            print(io, " " ^ (ndigits_max + 2))
+        if VERSION ≥ v"1.10"
+            printstyled(io, "internal", color = :light_black, italic=true)
         else
-            print(io, " ")
+            printstyled(io, "internal", color = :light_black)
         end
-        printstyled(io, "@ ", color = :light_black)
+        print(io, " ")
+        if VERSION ≥ v"1.10"
+            printstyled(io, "@ ", color = :light_black, italic=true)
+        else
+            printstyled(io, "@ ", color = :light_black)
+        end
         if length(modules) > 0
             for (i, m) ∈ enumerate(modules)
                 modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
-                printstyled(io, m, color = modulecolor)
+                if VERSION ≥ v"1.10"
+                    printstyled(io, m, color = modulecolor, italic=true)
+                else
+                    printstyled(io, m, color = modulecolor)
+                end
                 i < length(modules) && print(io, ", ")
             end
         end
