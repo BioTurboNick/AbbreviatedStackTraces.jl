@@ -237,7 +237,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     # select frames from user-controlled code
     if VERSION >= v"1.11.0-DEV.511"
-        is = parse(Bool, get(ENV, "JULIA_STACKTRACE_PUBLIC", "true")) ? find_visible_frames_public(trace) : find_visible_frames(trace)
+        is = parse(Bool, get(ENV, "JULIA_STACKTRACE_PUBLIC", "false")) ? find_visible_frames_public(trace) : find_visible_frames(trace)
     else
         is = find_visible_frames(trace)
     end
