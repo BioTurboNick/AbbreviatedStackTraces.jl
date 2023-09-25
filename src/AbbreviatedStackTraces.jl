@@ -45,8 +45,9 @@ is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
 # 6. Include the first frame above each contiguous set of user code frames to show what the user code called into.
 # 7. To support broadcasting, identify any visible `materialize` frames, and include the first frame after
 #    the broadcast functions, to show what function is being broadcast.
-# 8. Remove the topmost frame if it's a REPL toplevel.
-# 9. Remove a broadcast materialize frame if it's the topmost frame.
+# 8. Optionally add back public frames based on ENV["JULIA_STACKTRACE_PUBLIC"]
+# 9. Remove the topmost frame if it's a REPL toplevel.
+# 10. Remove a broadcast materialize frame if it's the topmost frame.
 function find_visible_frames(trace::Vector)
     user_frames_i = findall(trace) do frame
         file = String(frame[1].file)
