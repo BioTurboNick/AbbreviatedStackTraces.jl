@@ -3,6 +3,7 @@ __precompile__(false)
 import Base:
     BIG_STACKTRACE_SIZE,
     contractuser,
+    Filesystem,
     fixup_stdlib_path,
     invokelatest,
     printstyled,
