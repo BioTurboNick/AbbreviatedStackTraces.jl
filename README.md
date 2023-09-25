@@ -32,6 +32,7 @@ But in the rarer case where the issue was *not* in your code, the full trace can
 ## Options
 * `ENV["JULIA_STACKTRACE_ABBREVIATED"] = true` enables abbreviated stack traces for all traces, not just those originating from an interactive session
 * `ENV["JULIA_STACKTRACE_MINIMAL"] = true` omits type information for a one-line-per-frame minimal variant (see below)
+* `ENV["JULIA_STACKTRACE_PUBLIC"] = true` will re-insert all functions from a module's public API (part of `names(module)`)
 
 ## Examples
 

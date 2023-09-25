@@ -6,6 +6,8 @@ import Base:
     fixup_stdlib_path,
     invokelatest,
     printstyled,
+    print_module_path_file,
+    print_stackframe,
     process_backtrace,
     show,
     show_backtrace,
@@ -269,13 +271,19 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
-    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+    minimal = (get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame, minimal)
     if n > 1
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+    if minimal
+        print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = 1)
+    else
+        println(io)
+        print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+    end
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
