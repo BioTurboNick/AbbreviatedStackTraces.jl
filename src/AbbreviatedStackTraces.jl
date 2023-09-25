@@ -165,6 +165,11 @@ function find_visible_frames_public(trace::Vector)
     # add back public frames
     sort!(union!(visible_frames_i, public_frames_i))
 
+    if length(trace) > 1 && visible_frames_i[end] != length(trace)
+        # add back the top level if it's not included (as can happen if a macro is expanded at top-level)
+        push!(visible_frames_i, length(trace))
+    end
+
     if length(visible_frames_i) > 0 && visible_frames_i[end] == length(trace)
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
@@ -191,7 +196,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
-        print(io, " " ^ (ndigits_max + 2))
+        print(io, " " ^ (ndigits_max + 4))
         printstyled(io, "⋮ ", bold = true)
         if VERSION ≥ v"1.10"
             printstyled(io, "internal", color = :light_black, italic=true)
