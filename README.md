@@ -59,7 +59,7 @@ It aims to find the stack frames of code you don't control and excludes them by 
 
 The global `err` variable stores the last error and can show the full, original stack trace easily.
 
-You can also add back functions with public (Julia 1.11) or exported (Julia 1.9, 1.10) names be setting `ENV["JULIA_STACKTRACE_PUBLIC"] = true`.
+You can also add back functions with public (Julia 1.11) or exported (Julia 1.9, 1.10) names by setting `ENV["JULIA_STACKTRACE_PUBLIC"] = true`.
 
 <img width="737" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/66b77163-e3a1-424a-9c28-7df52caa1ebb">
 
