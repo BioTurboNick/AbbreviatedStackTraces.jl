@@ -198,13 +198,13 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         print(io, " " ^ (ndigits_max + 4))
         printstyled(io, "⋮ ", bold = true)
-        if VERSION ≥ v"1.10"
+        if VERSION ≥ v"1.10-alpha"
             printstyled(io, "internal", color = :light_black, italic=true)
         else
             printstyled(io, "internal", color = :light_black)
         end
         print(io, " ")
-        if VERSION ≥ v"1.10"
+        if VERSION ≥ v"1.10-alpha"
             printstyled(io, "@ ", color = :light_black, italic=true)
         else
             printstyled(io, "@ ", color = :light_black)
@@ -212,7 +212,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         if length(modules) > 0
             for (i, m) ∈ enumerate(modules)
                 modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
-                if VERSION ≥ v"1.10"
+                if VERSION ≥ v"1.10-alpha"
                     printstyled(io, m, color = modulecolor, italic=true)
                     i < length(modules) && printstyled(io, ", ", color = :light_black, italic=true)
                 else
@@ -225,7 +225,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # indicate presence of inlined methods which lack module information
         # (they all do right now)
         if any(isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
-            if VERSION ≥ v"1.10"
+            if VERSION ≥ v"1.10-alpha"
                 length(modules) > 0 && printstyled(io, ", ", color = :light_black, italic=true)
                 printstyled(io, "Unknown", color = :light_black, italic=true)
             else

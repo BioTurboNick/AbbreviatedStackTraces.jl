@@ -90,6 +90,6 @@ else
     end
 end
 
-if VERSION > v"1.6"
+if VERSION ≥ v"1.7"
     include("override-stacktraces-not1.6.jl")
 end

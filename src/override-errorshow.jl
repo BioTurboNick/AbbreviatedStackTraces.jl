@@ -7,7 +7,6 @@ import Base:
     fixup_stdlib_path,
     invokelatest,
     printstyled,
-    print_module_path_file,
     print_stackframe,
     process_backtrace,
     show,
@@ -22,6 +21,10 @@ import Base:
     stacktrace_linebreaks,
     update_stackframes_callback,
     StackTraces
+
+if VERSION ≥ v"1.7"
+    import Base.print_module_path_file
+end
 
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
@@ -122,7 +125,11 @@ if VERSION < v"1.9"
         !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
     
         # filename, separator, line
-        printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+        if VERSION < v"1.7"
+            printstyled(io, basename(file), ":", line; color = :light_black)
+        else
+            printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+        end
     end
 end
 
