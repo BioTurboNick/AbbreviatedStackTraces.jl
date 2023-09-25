@@ -55,6 +55,8 @@ It aims to find the stack frames of code you don't control and excludes them by 
 
 <img width="736" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/a03ff4ca-9113-4546-9269-00526b7323b4">
 
+(Note: italics only works on Julia 1.10+)
+
 The global `err` variable stores the last error and can show the full, original stack trace easily.
 
 You can also add back functions with public (Julia 1.11) or exported (Julia 1.9, 1.10) names be setting `ENV["JULIA_STACKTRACE_PUBLIC"] = true`.
