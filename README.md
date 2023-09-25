@@ -34,6 +34,10 @@ But in the rarer case where the issue was *not* in your code, the full trace can
 * `ENV["JULIA_STACKTRACE_MINIMAL"] = true` omits type information for a one-line-per-frame minimal variant (see below)
 * `ENV["JULIA_STACKTRACE_PUBLIC"] = true` will re-insert all functions from a module's public API (part of `names(module)`)
 
+## startup.jl and VSCode
+Unfortunately, startup.jl is executed before VSCodeServer loads, which means the appropriate methods won't be overwritten.
+Some workarounds are discussed here: https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/issues/38
+
 ## Examples
 
 Here's an example of a stack trace by chaining BenchmarkTools and Plots:
