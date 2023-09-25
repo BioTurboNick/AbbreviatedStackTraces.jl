@@ -32,6 +32,11 @@ But in the rarer case where the issue was *not* in your code, the full trace can
 ## Options
 * `ENV["JULIA_STACKTRACE_ABBREVIATED"] = true` enables abbreviated stack traces for all traces, not just those originating from an interactive session
 * `ENV["JULIA_STACKTRACE_MINIMAL"] = true` omits type information for a one-line-per-frame minimal variant (see below)
+* `ENV["JULIA_STACKTRACE_PUBLIC"] = true` will re-insert all functions from a module's public API (part of `names(module)`; Julia < 1.11, this will just be exported names)
+
+## startup.jl and VSCode
+Unfortunately, startup.jl is executed before VSCodeServer loads, which means the appropriate methods won't be overwritten.
+Some workarounds are discussed here: https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/issues/38
 
 ## Examples
 
@@ -43,26 +48,35 @@ using AbbreviatedStackTraces # over-writes error-related `Base` methods
 using BenchmarkTools, Plots
 @btime plot([1,2,3], seriestype=:blah)
 ```
-![image](https://user-images.githubusercontent.com/1438610/115907559-0c36b300-a437-11eb-87c3-ba314ab6db72.png)
+
+<img width="848" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/7d32ab8d-ff92-47d1-93b1-d683edc6cb85">
 
 It aims to find the stack frames of code you don't control and excludes them by default, except for the first frame into that package. In it's place, it lists the modules called in the intervening frames. The theory is that errors in your code are much more likely than errors inside Base, the Stdlibs, or published packages, so their internals are usually superfluous.
 
-![image](https://user-images.githubusercontent.com/1438610/116329328-1dfeba00-a799-11eb-8b86-f5c28e5b78e0.png)
+<img width="736" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/a03ff4ca-9113-4546-9269-00526b7323b4">
+
+(Note: italics only works on Julia 1.10+)
 
 The global `err` variable stores the last error and can show the full, original stack trace easily.
 
-There is an optional minimal display available, accessed by setting `ENV["JULIA_STACKTRACE_MINIMAL"] = true`.
-![image](https://user-images.githubusercontent.com/1438610/116329297-0b848080-a799-11eb-9d71-32650092b3a5.png)
+You can also add back functions with public (Julia 1.11) or exported (Julia 1.9, 1.10) names be setting `ENV["JULIA_STACKTRACE_PUBLIC"] = true`.
 
+<img width="737" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/66b77163-e3a1-424a-9c28-7df52caa1ebb">
+
+There is an optional minimal display available, accessed by setting `ENV["JULIA_STACKTRACE_MINIMAL"] = true`.
+
+<img width="838" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/9379b2a9-7880-4122-8727-64cd6c5fed18">
 
 
 
 Here's an example a beginner might readily run into:
-![image](https://user-images.githubusercontent.com/1438610/121451945-8a5e0300-c96c-11eb-9070-d431b1cadc56.png)
+
+<img width="845" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/b6af91a2-bff2-4a0f-91fd-c33b8727e165">
 
 **Yikes!**
 
 With this package:
-![image](https://user-images.githubusercontent.com/1438610/121452028-b4172a00-c96c-11eb-961b-300cbcbf5ad9.png)
+
+<img width="845" alt="image" src="https://github.com/BioTurboNick/AbbreviatedStackTraces.jl/assets/1438610/ec413046-bb1e-43e6-bc93-ca29852a69c7">
 
 **Much better!**

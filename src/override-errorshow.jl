@@ -6,6 +6,8 @@ import Base:
     fixup_stdlib_path,
     invokelatest,
     printstyled,
+    print_module_path_file,
+    print_stackframe,
     process_backtrace,
     show,
     show_backtrace,
@@ -64,193 +66,6 @@ function show_backtrace(io::IO, t::Vector)
     return
 end
 
-if VERSION < v"1.10-alpha1"
-    import Base:
-        _simplify_include_frames
-
-    # Copied from v1.10-alpha1
-    # Collapse frames that have the same location (in some cases)
-    function _collapse_repeated_frames(trace)
-        kept_frames = trues(length(trace))
-        last_frame = nothing
-        for i in 1:length(trace)
-            frame::StackFrame, _ = trace[i]
-            if last_frame !== nothing && frame.file == last_frame.file && frame.line == last_frame.line
-                #=
-                Handles this case:
-
-                f(g, a; kw...) = error();
-                @inline f(a; kw...) = f(identity, a; kw...);
-                f(1)
-
-                which otherwise ends up as:
-
-                [4] #f#4 <-- useless
-                @ ./REPL[2]:1 [inlined]
-                [5] f(a::Int64)
-                @ Main ./REPL[2]:1
-                =#
-                if startswith(sprint(show, last_frame), "#")
-                    kept_frames[i-1] = false
-                end
-
-                #= Handles this case
-                g(x, y=1, z=2) = error();
-                g(1)
-
-                which otherwise ends up as:
-
-                [2] g(x::Int64, y::Int64, z::Int64)
-                @ Main ./REPL[1]:1
-                [3] g(x::Int64) <-- useless
-                @ Main ./REPL[1]:1
-                =#
-                if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
-                    frame.linfo.def isa Method && last_frame.linfo.def isa Method
-                    m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
-                    params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
-                    if last_m.nkw != 0
-                        pos_sig_params = last_params[(last_m.nkw+2):end]
-                        issame = true
-                        if pos_sig_params == params
-                            kept_frames[i] = false
-                        end
-                    end
-                    if length(last_params) > length(params)
-                        issame = true
-                        for i = 1:length(params)
-                            issame &= params[i] == last_params[i]
-                        end
-                        if issame
-                            kept_frames[i] = false
-                        end
-                    end
-                end
-
-                # TODO: Detect more cases that can be collapsed
-            end
-            last_frame = frame
-        end
-        return trace[kept_frames]
-    end
-    
-    if VERSION < v"1.9"
-        # copied just to add access to _collapse_repeated_frames, without kwcall
-        function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
-            n = 0
-            last_frame = StackTraces.UNKNOWN
-            count = 0
-            ret = Any[]
-            for i in eachindex(t)
-                lkups = t[i]
-                if lkups isa StackFrame
-                    lkups = [lkups]
-                else
-                    lkups = StackTraces.lookup(lkups)
-                end
-                for lkup in lkups
-                    if lkup === StackTraces.UNKNOWN
-                        continue
-                    end
-
-                    if (lkup.from_c && skipC)
-                        continue
-                    end
-                    code = lkup.linfo
-                    if code isa MethodInstance
-                        def = code.def
-                        if def isa Method && def.sig <: Tuple{NamedTuple,Any,Vararg}
-                            # hide keyword methods, which are probably internal keyword sorter methods
-                            # (we print the internal method instead, after demangling
-                            # the argument list, since it has the right line number info)
-                            continue
-                        end
-                    end
-                    count += 1
-                    if count > limit
-                        break
-                    end
-
-                    if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== last_frame.linfo
-                        if n > 0
-                            push!(ret, (last_frame, n))
-                        end
-                        n = 1
-                        last_frame = lkup
-                    else
-                        n += 1
-                    end
-                end
-                count > limit && break
-            end
-            if n > 0
-                push!(ret, (last_frame, n))
-            end
-            trace = _simplify_include_frames(ret)
-            trace = _collapse_repeated_frames(trace)
-            return trace
-        end
-    else
-        # copied just to add access to _collapse_repeated_frames
-        function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
-            n = 0
-            last_frame = StackTraces.UNKNOWN
-            count = 0
-            ret = Any[]
-            for i in eachindex(t)
-                lkups = t[i]
-                if lkups isa StackFrame
-                    lkups = [lkups]
-                else
-                    lkups = StackTraces.lookup(lkups)
-                end
-                for lkup in lkups
-                    if lkup === StackTraces.UNKNOWN
-                        continue
-                    end
-
-                    if (lkup.from_c && skipC)
-                        continue
-                    end
-                    code = lkup.linfo
-                    if code isa MethodInstance
-                        def = code.def
-                        if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
-                            # hide kwcall() methods, which are probably internal keyword sorter methods
-                            # (we print the internal method instead, after demangling
-                            # the argument list, since it has the right line number info)
-                            continue
-                        end
-                    elseif !lkup.from_c
-                        lkup.func === :kwcall && continue
-                    end
-                    count += 1
-                    if count > limit
-                        break
-                    end
-
-                    if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== last_frame.linfo
-                        if n > 0
-                            push!(ret, (last_frame, n))
-                        end
-                        n = 1
-                        last_frame = lkup
-                    else
-                        n += 1
-                    end
-                end
-                count > limit && break
-            end
-            if n > 0
-                push!(ret, (last_frame, n))
-            end
-            trace = _simplify_include_frames(ret)
-            trace = _collapse_repeated_frames(trace)
-            return trace
-        end
-    end
-end
-
 function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
 
@@ -269,13 +84,19 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
-    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+    minimal = (get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame, minimal)
     if n > 1
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+    if minimal
+        print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = 1)
+    else
+        println(io)
+        print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+    end
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
