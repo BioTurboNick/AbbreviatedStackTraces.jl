@@ -113,7 +113,7 @@ function find_visible_frames(trace::Vector)
     # add back public frames
     sort!(union!(visible_frames_i, public_frames_i))
 
-    if length(trace) > 1 && visible_frames_i[end] != length(trace)
+    if !isempty(visible_frames_i) && length(trace) > 1 && visible_frames_i[end] != length(trace)
         # add back the top level if it's not included (as can happen if a macro is expanded at top-level)
         push!(visible_frames_i, length(trace))
     end
