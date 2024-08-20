@@ -6,6 +6,7 @@ import Base:
     Filesystem,
     fixup_stdlib_path,
     invokelatest,
+    print_module_path_file,
     printstyled,
     print_stackframe,
     process_backtrace,
@@ -21,10 +22,6 @@ import Base:
     stacktrace_linebreaks,
     update_stackframes_callback,
     StackTraces
-
-if VERSION ≥ v"1.7"
-    import Base.print_module_path_file
-end
 
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
@@ -104,33 +101,6 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
-end
-
-if VERSION < v"1.9"
-    function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
-        printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
-    
-        # module
-        if modul !== nothing && modulecolor !== nothing
-            print(io, " ")
-            printstyled(io, modul, color = modulecolor)
-        end
-    
-        # filepath
-        file = fixup_stdlib_path(file)
-        stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-        stacktrace_contract_userdir() && (file = contractuser(file))
-        print(io, " ")
-        dir = dirname(file)
-        !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
-    
-        # filename, separator, line
-        if VERSION < v"1.7"
-            printstyled(io, basename(file), ":", line; color = :light_black)
-        else
-            printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
-        end
-    end
 end
 
 function show_exception_stack(io::IO, stack::ExceptionStack)
