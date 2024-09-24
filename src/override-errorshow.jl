@@ -3,6 +3,7 @@ __precompile__(false)
 import Base:
     BIG_STACKTRACE_SIZE,
     contractuser,
+    ExceptionStack,
     Filesystem,
     fixup_stdlib_path,
     invokelatest,
@@ -10,6 +11,7 @@ import Base:
     printstyled,
     print_stackframe,
     process_backtrace,
+    RefValue,
     show,
     show_backtrace,
     show_exception_stack,
@@ -27,10 +29,6 @@ function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
-
-    # this will be set to true if types in the stacktrace are truncated
-    limitflag = Ref(false)
-    io = IOContext(io, :stacktrace_types_limited => limitflag)
 
     # t is a pre-processed backtrace (ref #12856)
     if t isa Vector{Any}
@@ -53,16 +51,16 @@ function show_backtrace(io::IO, t::Vector)
         return
     else
         try invokelatest(update_stackframes_callback[], filtered) catch end
+
+        hide_internal_frames_flag = get(io, :compacttrace, nothing)
+        hide_internal_frames = hide_internal_frames_flag isa RefValue{Bool} ? hide_internal_frames_flag[] : false
+
         # process_backtrace returns a Vector{Tuple{Frame, Int}}
-        if get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
+        if hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
             show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
         else
             show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
         end
-    end
-
-    if limitflag[]
-        print(io, "\nSome type information was truncated. Use `show(err)` to see complete types.")
     end
     return
 end
@@ -85,14 +83,16 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
-    minimal = (get(io, :compacttrace, false) || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
-    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame, minimal)
+    hide_internal_frames_flag = get(io, :compacttrace, nothing)
+    hide_internal_frames = hide_internal_frames_flag isa RefValue{Bool} ? hide_internal_frames_flag[] : false
+    hide_internal_frames = (hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame, hide_internal_frames)
     if n > 1
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
 
     # @ Module path / file : line
-    if minimal
+    if hide_internal_frames
         print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = 1)
     else
         println(io)

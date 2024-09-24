@@ -1,21 +1,20 @@
 name = "AbbreviatedStackTraces"
 uuid = "ac637c84-cc71-43bf-9c33-c1b4316be3d4"
 authors = ["Nicholas Bauer <nicholasbauer@outlook.com>"]
-version = "0.2.3"
-
-[deps]
-REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+version = "0.3.0"
 
 [weakdeps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [extensions]
-DistributedExt = ["Distributed"]
+AbbrvStackTracesDistributedExt = ["Distributed"]
+AbbrvStackTracesREPLExt = ["REPL"]
 
 [compat]
 Distributed = "1"
 REPL = "1"
-julia = "1.9"
+julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

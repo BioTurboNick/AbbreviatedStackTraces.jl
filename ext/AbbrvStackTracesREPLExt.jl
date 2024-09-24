@@ -1,10 +1,34 @@
+module AbbrvStackTracesREPLExt
+
 __precompile__(false)
 
 import REPL:
     print_response
 
+if VERSION ≥ v"1.11"
+    import REPL:
+        repl_display_error
+end
+
 import Base:
     MainInclude
+
+function repl_display_error(errio::IO, @nospecialize errval)
+    # this will be set to true if types in the stacktrace are truncated
+    limit_types_flag = Ref(false)
+    # this will be set to false if frames in the stacktrace are not hidden
+    hide_internal_frames_flag = Ref(true)
+    
+    errio = IOContext(errio, :stacktrace_types_limited => limit_types_flag, :compacttrace => hide_internal_frames_flag)
+    Base.invokelatest(Base.display_error, errio, errval)
+    if limit_types_flag[] || hide_internal_frames_flag[]
+        limit_types_flag[] && print(errio, "Some type information was truncated. ")
+        hide_internal_frames_flag[] && print(errio, "Some frames were hidden. ")
+        print(errio, "Use `show(err)` to see complete trace.")
+        println(errio)
+    end
+    return nothing
+end
 
 function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
@@ -14,12 +38,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 val = Base.scrub_repl_backtrace(val)
-                if VERSION < v"1.10-alpha1"
-                    Base.istrivialerror(val) || setglobal!(Main, :err, val)
-                else
-                    Base.istrivialerror(val) || setglobal!(MainInclude, :err, val)
-                end
-                Base.invokelatest(Base.display_error, errio, val, true)
+                Base.istrivialerror(val) || setglobal!(MainInclude, :err, val)
+                Base.invokelatest(repl_display_error, errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -41,12 +61,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
-                    if VERSION < v"1.10-alpha1"
-                        setglobal!(Main, :err, excs)
-                    else
-                        setglobal!(MainInclude, :err, excs)
-                    end
-                    Base.invokelatest(Base.display_error, errio, excs)
+                    setglobal!(MainInclude, :err, excs)
+                    Base.invokelatest(repl_display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -62,4 +78,6 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
     end
     Base.sigatomic_end()
     nothing
+end
+
 end

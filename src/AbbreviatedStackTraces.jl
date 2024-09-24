@@ -1,15 +1,13 @@
 module AbbreviatedStackTraces
 
 include("override-vscode.jl")
-include("override-error.jl") # sets const `oldversion = true` if ExceptionStack wasn't defined by Base
 include("override-client.jl")
 include("override-errorshow.jl")
-include("override-show.jl")
 include("override-stacktraces.jl")
-include("override-REPL.jl")
 
 import Base:
     printstyled,
+    RefValue,
     StackFrame,
     stacktrace_contract_userdir,
     stacktrace_expand_basepaths,
@@ -210,13 +208,15 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         end
 
         # print if frames other than top-level were omitted
-        if num_frames - 1 > num_vis_frames 
+        hide_internal_frames_flag = get(io, :compacttrace, nothing)
+        if num_frames - 1 > num_vis_frames
             if lasti < num_frames - 1
                 println(io)
                 print_omitted_modules(lasti + 1, num_frames - 1)
             end
-            println(io)
-            print(io, "Use `err` to retrieve the full stack trace.")
+            hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = true)
+        else
+            hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = false)
         end
     end
 end

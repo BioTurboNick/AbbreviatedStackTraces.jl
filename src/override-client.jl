@@ -1,10 +1,7 @@
 __precompile__(false)
 
 import Base:
-    display_error,
-    printstyled,
     scrub_repl_backtrace,
-    show_exception_stack,
     stacktrace
 
 function scrub_repl_backtrace(bt)
@@ -19,10 +16,3 @@ function scrub_repl_backtrace(bt)
     end
     return bt
 end
-
-function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), stack)
-    println(io)
-end
-display_error(stack::ExceptionStack, compacttrace = false) = display_error(stderr, stack, compacttrace)
