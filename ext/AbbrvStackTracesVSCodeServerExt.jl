@@ -16,22 +16,6 @@ __precompile__(false)
     import Base.StackTraces:
         stacktrace
 
-    function display_repl_error(io, err, bt)
-        st = stacktrace(VSCodeServer.crop_backtrace(bt))
-        printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-        showerror(IOContext(io, :limit => true, :compacttrace => true), err, st)
-        println(io)
-    end
-    function display_repl_error(io, stack::VSCodeServer.EvalErrorStack)
-        printstyled(io, "ERROR: "; bold = true, color = Base.error_color())
-        for (i, (err, bt)) in enumerate(reverse(stack.stack))
-            i !== 1 && print(io, "\ncaused by: ")
-            st = stacktrace(crop_backtrace(bt))
-            showerror(IOContext(io, :limit => true, :compacttrace => true), i == 1 ? unwrap_loaderror(err) : err, st)
-            println(io)
-        end
-    end
-
     replcontext(io, limit_types_flag, hide_internal_frames_flag) = IOContext(
         io,
         :limit => true,
