@@ -1,6 +1,5 @@
 module AbbreviatedStackTraces
 
-include("override-vscode.jl")
 include("override-client.jl")
 include("override-errorshow.jl")
 include("override-stacktraces.jl")
