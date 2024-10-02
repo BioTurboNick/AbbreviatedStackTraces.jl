@@ -17,22 +17,18 @@ import Base.StackTraces:
     is_top_level_frame,
     stacktrace
 
-try
-    if isdefined(Main, :VSCodeServer)
-        @eval (@__MODULE__) begin
-            is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
-        end
+if isdefined(Main, :VSCodeServer)
+    @eval (@__MODULE__) begin
+        is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
     end
     include("../ext/AbbrvStackTracesVSCodeServerExt.jl")
-catch e
-    if !isa(e, UndefVarError) || e.var != :VSCodeServer
-        rethrow()
+else
+    # fallback
+    @eval (@__MODULE__) begin
+        is_ide_support(path) = false
     end
 end
 
-if !isdefined(@__MODULE__, :is_ide_support)
-    is_ide_support(path) = false # fallback if not defined
-end
 is_repl(path) = startswith(path, r"(.[/\\])?REPL")
 is_julia_dev(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_julia(path) =

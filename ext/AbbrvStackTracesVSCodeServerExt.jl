@@ -16,6 +16,8 @@ __precompile__(false)
     import Base.StackTraces:
         stacktrace
 
+    is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
+
     replcontext(io, limit_types_flag, hide_internal_frames_flag) = IOContext(
         io,
         :limit => true,
