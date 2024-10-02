@@ -17,6 +17,19 @@ import Base.StackTraces:
     is_top_level_frame,
     stacktrace
 
+try
+    if isdefined(Main, :VSCodeServer)
+        @eval (@__MODULE__) begin
+            is_ide_support(path) = contains(path, r"[/\\].vscode[/\\]")
+        end
+    end
+    include("../ext/AbbrvStackTracesVSCodeServerExt.jl")
+catch e
+    if !isa(e, UndefVarError) || e.var != :VSCodeServer
+        rethrow()
+    end
+end
+
 if !isdefined(@__MODULE__, :is_ide_support)
     is_ide_support(path) = false # fallback if not defined
 end

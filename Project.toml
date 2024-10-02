@@ -6,12 +6,10 @@ version = "0.3.0"
 [weakdeps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
-VSCodeServer = "9f5989ce-84fe-42d4-91ec-6a7a8d53ed0f"
 
 [extensions]
 AbbrvStackTracesDistributedExt = ["Distributed"]
 AbbrvStackTracesREPLExt = ["REPL"]
-AbbrvStackTracesVSCodeServerExt = ["VSCodeServer"]
 
 [compat]
 Distributed = "1"
