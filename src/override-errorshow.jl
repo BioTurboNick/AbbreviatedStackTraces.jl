@@ -30,6 +30,15 @@ function show_backtrace(io::IO, t::Vector)
         empty!(io[:last_shown_line_infos])
     end
 
+    hide_internal_frames_flag = get(io, :compacttrace, nothing)
+    if hide_internal_frames_flag isa RefValue{Bool}
+        hide_internal_frames = hide_internal_frames_flag[]
+        hide_internal_frames_flag[] = false # in case of early return
+    else
+        hide_internal_frames = false
+    end
+    
+
     # t is a pre-processed backtrace (ref #12856)
     if t isa Vector{Any}
         filtered = t
@@ -46,14 +55,16 @@ function show_backtrace(io::IO, t::Vector)
         end
     end
 
+    # restore
+    if hide_internal_frames_flag isa RefValue{Bool}
+        hide_internal_frames_flag[] = hide_internal_frames
+    end
+
     if length(filtered) > BIG_STACKTRACE_SIZE
         show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
     else
         try invokelatest(update_stackframes_callback[], filtered) catch end
-
-        hide_internal_frames_flag = get(io, :compacttrace, nothing)
-        hide_internal_frames = hide_internal_frames_flag isa RefValue{Bool} ? hide_internal_frames_flag[] : false
 
         # process_backtrace returns a Vector{Tuple{Frame, Int}}
         if hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
