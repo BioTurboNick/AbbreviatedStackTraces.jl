@@ -8,14 +8,12 @@ import Base:
     StackFrame
 
 import Base.StackTraces:
-    frame_method_or_module,
-    frame_mi,
     show_spec_linfo,
     show_spec_sig,
     top_level_scope_sym
 
-if VERSION < v"1.12"
-    function show_spec_linfo(io::IO, frame::StackFrame, minimal::Bool)
+if VERSION ≤ v"1.11"
+    function show_spec_linfo(io::IO, frame::StackFrame, minimal::Bool = false)
         linfo = frame.linfo
         if linfo === nothing || minimal
             if frame.func === empty_sym
@@ -42,9 +40,11 @@ if VERSION < v"1.12"
         end
     end
 else
-    import Base.StackTraces: frame_mi
+    import Base.StackTraces:
+        frame_method_or_module,
+        frame_mi
 
-    function show_spec_linfo(io::IO, frame::StackFrame, minimal::Bool)
+    function show_spec_linfo(io::IO, frame::StackFrame, minimal::Bool = false)
         linfo = frame.linfo
         if linfo === nothing || minimal
             if frame.func === empty_sym
