@@ -99,7 +99,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     hide_internal_frames = (hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame, hide_internal_frames)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
     end
 
     # @ Module path / file : line
@@ -129,12 +129,9 @@ function show_exception_stack(io::IO, stack::ExceptionStack)
     end
 end
 
-show(io::IO, stack::ExceptionStack; kwargs...) = show(io, MIME("text/plain"), stack; kwargs...)
-function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frames = false)
+show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     nexc = length(stack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
-    if !show_repl_frames
-        stack = ExceptionStack([ (exception = x.exception, backtrace = x.backtrace) for x in stack ])
-    end
     show_exception_stack(io, stack)
 end

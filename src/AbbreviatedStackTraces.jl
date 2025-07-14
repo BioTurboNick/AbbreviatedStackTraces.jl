@@ -29,6 +29,10 @@ else
     end
 end
 
+if isassigned(Base.REPL_MODULE_REF) && nameof(Base.REPL_MODULE_REF[]) == :REPL
+    include("../ext/AbbrvStackTracesREPLExt.jl")
+end
+
 is_repl(path) = startswith(path, r"(.[/\\])?REPL")
 is_julia_dev(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 is_julia(path) =
