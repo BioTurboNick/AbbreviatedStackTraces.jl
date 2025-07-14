@@ -12,7 +12,7 @@ import Base.StackTraces:
     show_spec_sig,
     top_level_scope_sym
 
-if VERSION ≤ v"1.11"
+if VERSION ≤ v"1.12-alpha"
     function show_spec_linfo(io::IO, frame::StackFrame, minimal::Bool = false)
         linfo = frame.linfo
         if linfo === nothing || minimal
