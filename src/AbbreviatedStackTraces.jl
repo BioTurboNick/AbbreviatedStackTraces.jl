@@ -29,7 +29,7 @@ else
     end
 end
 
-if nameof(Base.REPL_MODULE_REF[]) == :REPL
+if isassigned(Base.REPL_MODULE_REF) && nameof(Base.REPL_MODULE_REF[]) == :REPL
     include("../ext/AbbrvStackTracesREPLExt.jl")
 end
 
