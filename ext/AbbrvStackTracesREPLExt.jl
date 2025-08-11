@@ -14,6 +14,7 @@ end
 if VERSION ≥ v"1.12-alpha"
     import REPL:
         call_on_backend
+
     function REPL.print_response(errio::IO, response, backend::Union{REPL.REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
         Base.sigatomic_begin()
         val, iserr = response
