@@ -12,9 +12,6 @@ if VERSION ≥ v"1.11"
 end
 
 if VERSION ≥ v"1.12-alpha"
-    import REPL:
-        call_on_backend
-
     function REPL.print_response(errio::IO, response, backend::Union{REPL.REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
         Base.sigatomic_begin()
         val, iserr = response
@@ -29,11 +26,11 @@ if VERSION ≥ v"1.12-alpha"
                     if val !== nothing && show_value
                         val2, iserr = if specialdisplay === nothing
                             # display calls may require being run on the main thread
-                            call_on_backend(backend) do
+                            REPL.call_on_backend(backend) do
                                 Base.invokelatest(display, val)
                             end
                         else
-                            call_on_backend(backend) do
+                            REPL.call_on_backend(backend) do
                                 Base.invokelatest(display, specialdisplay, val)
                             end
                         end
