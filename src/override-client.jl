@@ -4,7 +4,7 @@ import Base:
     scrub_repl_backtrace,
     stacktrace
 
-if VERSION > v"1.11.4"
+if VERSION ≥ v"1.12-alpha"
     function scrub_repl_backtrace(bt)
         if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
             bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
