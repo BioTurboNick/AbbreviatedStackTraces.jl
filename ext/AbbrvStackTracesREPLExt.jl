@@ -28,7 +28,9 @@ if VERSION ≥ v"1.12-alpha"
                     if val !== nothing && show_value
                         val2, iserr = if specialdisplay === nothing
                             # display calls may require being run on the main thread
-                            Base.invokelatest(display, val), false
+                            REPL.call_on_backend(backend) do
+                                Base.invokelatest(display, val)
+                            end
                         else
                             REPL.call_on_backend(backend) do
                                 Base.invokelatest(display, specialdisplay, val)
