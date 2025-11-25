@@ -11,6 +11,8 @@ if VERSION ≥ v"1.11"
     REPL.repl_display_error(errio::IO, @nospecialize errval) = repl_display_error_abbrv(errio, errval)
 end
 
+
+
 if VERSION ≥ v"1.12-alpha"
     function REPL.print_response(errio::IO, response, backend::Union{REPL.REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
         Base.sigatomic_begin()
@@ -26,9 +28,7 @@ if VERSION ≥ v"1.12-alpha"
                     if val !== nothing && show_value
                         val2, iserr = if specialdisplay === nothing
                             # display calls may require being run on the main thread
-                            REPL.call_on_backend(backend) do
-                                Base.invokelatest(display, val)
-                            end
+                            Base.invokelatest(display, val), false
                         else
                             REPL.call_on_backend(backend) do
                                 Base.invokelatest(display, specialdisplay, val)
@@ -64,6 +64,11 @@ if VERSION ≥ v"1.12-alpha"
         end
         Base.sigatomic_end()
         nothing
+    end
+    function REPL.call_on_backend(f, backend::REPL.REPLBackendRef)
+        applicable(f) || error("internal error: f is not callable")
+        put!(backend.repl_channel, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
+        return take!(backend.response_channel) # (val, iserr)
     end
 else
     function REPL.print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
