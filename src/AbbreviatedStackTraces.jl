@@ -230,6 +230,18 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         else
             hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = false)
         end
+    else
+        # No frame was selected as visible, which happens when every frame is internal
+        last_omitted = num_frames > 1 &&
+            is_top_level_frame(trace[end][1]) &&
+            is_repl(String(trace[end][1].file)) ? num_frames - 1 : num_frames
+        if last_omitted ≥ 1
+            print(io, "\nStacktrace:")
+            println(io)
+            print_omitted_modules(1, last_omitted)
+            hide_internal_frames_flag = get(io, :compacttrace, nothing)
+            hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = true)
+        end
     end
 end
 
