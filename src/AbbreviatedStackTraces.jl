@@ -56,7 +56,7 @@ is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
 #    the broadcast functions, to show what function is being broadcast.
 # 8. Optionally add back public frames based on ENV["JULIA_STACKTRACE_PUBLIC"]
 # 9. Remove the topmost frame if it's a REPL toplevel.
-# 10. Remove a broadcast materialize frame if it's the topmost frame.
+# 10. Keep a broadcast materialize frame if it's the only visible frame.
 function find_visible_frames(trace::Vector)
     public_frames_i = if parse(Bool, get(ENV, "JULIA_STACKTRACE_PUBLIC", "false"))
         pfi = findall(trace) do frame
@@ -131,11 +131,6 @@ function find_visible_frames(trace::Vector)
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
         startswith(String(trace[end][1].file), "REPL") && pop!(visible_frames_i)
-    end
-
-    if length(visible_frames_i) == 1 && trace[only(visible_frames_i)][1].func == :materialize
-        # remove a materialize frame if it is the only visible frame
-        pop!(visible_frames_i)
     end
 
     return visible_frames_i
