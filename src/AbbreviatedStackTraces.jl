@@ -135,7 +135,7 @@ function find_visible_frames(trace::Vector)
     return visible_frames_i
 end
 
-function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
+function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix = nothing)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
     num_frames = length(trace)
@@ -147,6 +147,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
+        prefix === nothing || print(io, prefix)
         print(io, " " ^ (ndigits_max + 4))
         printstyled(io, "⋮ ", bold = true)
         if VERSION ≥ v"1.10-alpha"
@@ -192,7 +193,9 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_vis_frames = length(is)
 
     if num_vis_frames > 0
-        print(io, "\nStacktrace:")
+        println(io)
+        prefix === nothing || print(io, prefix)
+        print(io, "Stacktrace:")
 
         if is[1] > 1
             println(io)
@@ -206,7 +209,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
                 print_omitted_modules(lasti + 1, i - 1)
             end
             println(io)
-            Base.print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
+            print_compact_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler; prefix)
             if i < num_frames - 1
                 print_linebreaks && println(io)
             end
@@ -231,13 +234,69 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             is_top_level_frame(trace[end][1]) &&
             is_repl(String(trace[end][1].file)) ? num_frames - 1 : num_frames
         if last_omitted ≥ 1
-            print(io, "\nStacktrace:")
+            println(io)
+            prefix === nothing || print(io, prefix)
+            print(io, "Stacktrace:")
             println(io)
             print_omitted_modules(1, last_omitted)
             hide_internal_frames_flag = get(io, :compacttrace, nothing)
             hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = true)
         end
     end
+end
+
+@static if VERSION ≥ v"1.13.0-rc3"
+    #= 1.13 dropped the frame-repetition count from `Base.print_stackframe` in favor of
+    drawing cycle brackets around repeated frames, which can't span the gaps an
+    abbreviated trace leaves behind. Render the frame ourselves instead, keeping the
+    pre-1.13 `(repeats n times)` annotation. =#
+    function print_compact_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix = nothing)
+        file, line = string(frame.file), frame.line
+
+        # Used by the REPL to make it possible to open
+        # the location of a stackframe/method in the editor.
+        if haskey(io, :last_shown_line_infos)
+            push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
+        end
+
+        inlined = getfield(frame, :inlined)
+        modul = parentmodule(frame)
+        modulecolor = get_modulecolor!(modulecolordict, modul, modulecolorcycler)
+
+        digit_align_width = ndigits_max + 2
+
+        # frame number
+        prefix === nothing || print(io, prefix)
+        print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
+        print(io, " ")
+
+        minimal = parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
+        if minimal
+            show_spec_linfo_minimal(IOContext(io, :backtrace=>true), frame)
+        else
+            Base.StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+        end
+        if n > 1
+            printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
+        end
+
+        # @ Module path / file : line
+        if minimal
+            print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = 1)
+        else
+            println(io)
+            prefix === nothing || print(io, prefix)
+            print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+        end
+
+        # inlined
+        printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+    end
+else
+    # `Base.print_stackframe` handles `JULIA_STACKTRACE_MINIMAL` itself via the override in
+    # `override-errorshow.jl`, and abbreviated traces never carry a prefix before 1.13.
+    print_compact_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix = nothing) =
+        Base.print_stackframe(io, i, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
 end
 
 function get_modulecolor!(modulecolordict, m, modulecolorcycler)
