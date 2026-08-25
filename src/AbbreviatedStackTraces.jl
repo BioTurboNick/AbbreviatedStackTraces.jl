@@ -56,7 +56,6 @@ is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
 #    the broadcast functions, to show what function is being broadcast.
 # 8. Optionally add back public frames based on ENV["JULIA_STACKTRACE_PUBLIC"]
 # 9. Remove the topmost frame if it's a REPL toplevel.
-# 10. Remove a broadcast materialize frame if it's the topmost frame.
 function find_visible_frames(trace::Vector)
     public_frames_i = if parse(Bool, get(ENV, "JULIA_STACKTRACE_PUBLIC", "false"))
         pfi = findall(trace) do frame
@@ -131,11 +130,6 @@ function find_visible_frames(trace::Vector)
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
         startswith(String(trace[end][1].file), "REPL") && pop!(visible_frames_i)
-    end
-
-    if length(visible_frames_i) == 1 && trace[only(visible_frames_i)][1].func == :materialize
-        # remove a materialize frame if it is the only visible frame
-        pop!(visible_frames_i)
     end
 
     return visible_frames_i
@@ -229,6 +223,19 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = true)
         else
             hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = false)
+        end
+    else
+        # No frame was selected as visible, which happens when every frame is internal
+        # (This should be rare.)
+        last_omitted = num_frames > 1 &&
+            is_top_level_frame(trace[end][1]) &&
+            is_repl(String(trace[end][1].file)) ? num_frames - 1 : num_frames
+        if last_omitted ≥ 1
+            print(io, "\nStacktrace:")
+            println(io)
+            print_omitted_modules(1, last_omitted)
+            hide_internal_frames_flag = get(io, :compacttrace, nothing)
+            hide_internal_frames_flag isa RefValue{Bool} && (hide_internal_frames_flag[] = true)
         end
     end
 end
