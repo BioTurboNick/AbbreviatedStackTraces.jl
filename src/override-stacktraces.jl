@@ -22,8 +22,51 @@ function show_spec_linfo_minimal(io::IO, frame::StackFrame)
     elseif frame.func === top_level_scope_sym
         print(io, "top-level scope")
     else
-        print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+        kwfunc = kwcall_function_type(frame)
+        if kwfunc === nothing
+            print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+        else
+            Base.show_signature_function(io, kwfunc, #=demangle=#true)
+        end
     end
+end
+
+if VERSION ≥ v"1.12-alpha"
+    frame_method(frame::StackFrame) = Base.StackTraces.frame_method_or_module(frame)
+    function frame_spec_types(frame::StackFrame)
+        mi = Base.StackTraces.frame_mi(frame)
+        return mi === nothing ? nothing : mi.specTypes
+    end
+else
+    function frame_method(frame::StackFrame)
+        linfo = frame.linfo
+        linfo isa Method && return linfo
+        linfo isa MethodInstance && return linfo.def
+        return nothing
+    end
+    frame_spec_types(frame::StackFrame) =
+        frame.linfo isa MethodInstance ? frame.linfo.specTypes : nothing
+end
+
+#= A method taking keyword arguments is compiled into a body method named `#f#123`, and
+`demangle_function_name` can't recover an `f` from that — it only strips a *trailing* `#123`.
+
+This is not a rule of our own. Base never names such a frame after the method either:
+`show_tuple_as_call` ignores the name `show_spec_sig` hands it and takes the frame's name from
+the signature slot just past the keywords, which is the function the caller actually wrote.
+Read the same slot, off the same specialized signature, so that a minimal frame agrees with the
+full one — down to a parametric callable reading `Callable{Int64}` rather than `Callable{T}`.
+Returns `nothing` for every other kind of frame, whose own name is already the right one.
+
+Only 1.14 reaches this: before it, `process_backtrace` collapsed the body frame into the
+plainly-named one, so no mangled name ever arrived here. =#
+function kwcall_function_type(frame::StackFrame)
+    m = frame_method(frame)
+    m isa Method && m.nkw > 0 || return nothing
+    spec = frame_spec_types(frame)
+    sig = Base.unwrap_unionall(spec === nothing ? m.sig : spec)
+    sig isa DataType && length(sig.parameters) > m.nkw + 1 || return nothing
+    return sig.parameters[m.nkw + 2]
 end
 
 if VERSION ≤ v"1.12-alpha"

@@ -1,13 +1,14 @@
-#= Frame numbers and line numbers move whenever Base's internals move, so they are matched
-loosely; the shape of the trace — which frames survive, which modules are named in the
-`⋮ internal` summaries, and how it all lines up — is what these tests pin down. =#
+#= Frame numbers, line numbers, signatures and inlining decisions all move whenever Base's
+internals move, so they are matched loosely; the shape of the trace — which frames survive,
+which modules are named in the `⋮ internal` summaries, and how it all lines up — is what these
+tests pin down. =#
 
 @testset "sum([])" begin
     tr = lines(trace_block("sum([])"))
     @test length(tr) == 5
     @test tr[1] == "Stacktrace:"
-    @test occursin(r"^ *⋮ internal @ Base, Unknown$", tr[2])
-    @test occursin(r"^ *\[\d+\] sum\(a::Vector\{Any\}\)$", tr[3])
+    @test occursin(omitted("Base"), tr[2])
+    @test occursin(r"^ *\[\d+\] sum\(a::Vector\{Any\}", tr[3])
     @test occursin(at("Base", "./reducedim.jl"), tr[4])
     @test tr[5] == HIDDEN
     @test aligned(trace_block("sum([])"))
@@ -20,7 +21,7 @@ end
     tr = lines(trace_block("1 .+ [2,\"\"]"))
     @test length(tr) == 5
     @test tr[1] == "Stacktrace:"
-    @test occursin(r"^ *⋮ internal @ Base.Broadcast, Unknown$", tr[2])
+    @test occursin(omitted("Base.Broadcast"), tr[2])
     @test occursin(r"^ *\[\d+\] materialize\(bc::Base\.Broadcast\.Broadcasted\{", tr[3])
     @test occursin("…", tr[3]) # type parameters truncated
     @test occursin(at("Base.Broadcast", "./broadcast.jl"), tr[4])
@@ -32,9 +33,9 @@ end
     # The function the user defined is user code; what it called into is shown, nothing below
     tr = lines(trace_block("f() = sum([])", "f()"))
     @test length(tr) == 7
-    @test occursin(r"^ *⋮ internal @ Base, Unknown$", tr[2])
-    @test occursin(r"^ *\[\d+\] sum$", tr[3])
-    @test occursin(at(nothing, "./reducedim.jl"; suffix = " [inlined]"), tr[4])
+    @test occursin(omitted("Base"), tr[2])
+    @test occursin(r"^ *\[\d+\] sum\b", tr[3])
+    @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
     @test occursin(r"^ *\[\d+\] f\(\)$", tr[5])
     @test occursin(at("Main", "./REPL[1]"), tr[6])
     @test tr[7] == HIDDEN
@@ -48,14 +49,64 @@ end
     trace = trace_block("using BenchmarkTools", "@btime sum([])")
     tr = lines(trace)
     @test length(tr) == 8
-    @test occursin(r"^ *⋮ internal @ Base, Unknown$", tr[2])
-    @test occursin(r"^ *\[\d+\] sum$", tr[3])
-    @test occursin(at(nothing, "./reducedim.jl"; suffix = " [inlined]"), tr[4])
-    @test occursin(r"^ *⋮ internal @ Main, BenchmarkTools, Unknown$", tr[5])
+    @test occursin(omitted("Base"), tr[2])
+    @test occursin(r"^ *\[\d+\] sum\b", tr[3])
+    @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
+    @test occursin(omitted("Main", "BenchmarkTools"), tr[5])
     @test occursin(r"^ *\[\d+\] top-level scope$", tr[6])
     @test occursin(r"^ *@ .*[/\\]BenchmarkTools[/\\].*[/\\]execution\.jl:\d+$", tr[7])
     @test tr[8] == HIDDEN
     @test aligned(trace)
+end
+
+# `@ Main <this file>:12`, without the module when the frame was inlined (before 1.14)
+const HERE = Regex("^ *@ (Main )?.*" * regex_quote(basename(@__FILE__)) * ":\\d+( \\[inlined\\])?\$")
+
+#= A user → Base → user call chain. Defined here rather than typed at the prompt so the frames
+come from a file, which is the ordinary case; a recursive self-reference also needs a settled
+world age, which 1.12+ warns about otherwise. =#
+chain_inner(x) = sum([])
+chain_middle(v) = map(chain_inner, v)
+chain_outer() = chain_middle([1])
+recurse(n) = n == 0 ? sum([]) : recurse(n - 1)
+
+@testset "user code kept across internal frames" begin
+    #= Every user frame survives, each contiguous run of them keeps the one frame below it to
+    show what that run called into, and the internal frames separating the runs collapse into
+    a `⋮` of their own. =#
+    trace = trace_block("chain_outer()")
+    tr = lines(trace)
+    @test length(tr) == 14
+    @test occursin(omitted("Base"), tr[2])
+    @test occursin(r"^ *\[\d+\] sum\b", tr[3]) # what chain_inner called into
+    @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
+    @test occursin(r"^ *\[\d+\] chain_inner\b", tr[5])
+    @test occursin(HERE, tr[6])
+    @test occursin(omitted("Base"), tr[7]) # map's internals
+    @test occursin(r"^ *\[\d+\] map\b", tr[8]) # what chain_middle called into
+    @test occursin(at_inlined("Base", "./abstractarray.jl"), tr[9])
+    @test occursin(r"^ *\[\d+\] chain_middle\b", tr[10])
+    @test occursin(HERE, tr[11])
+    @test occursin(r"^ *\[\d+\] chain_outer\(\)$", tr[12])
+    @test occursin(HERE, tr[13])
+    @test tr[14] == HIDDEN
+    @test aligned(trace)
+end
+
+@testset "deep recursion" begin
+    #= 61 frames of `recurse` push the trace past `BIG_STACKTRACE_SIZE`, which is where Base's
+    own display switches to cycle detection. An abbreviated trace collapses them itself and
+    keeps the pre-1.13 `(repeats n times)` annotation, because the bracket notation 1.13
+    introduced cannot span the gaps abbreviation leaves behind. =#
+    tr = lines(trace_block("recurse(60)"))
+    @test length(tr) == 7
+    @test occursin(omitted("Base"), tr[2])
+    @test occursin(r"^ *\[\d+\] sum\b", tr[3])
+    @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
+    @test occursin(r"^ *\[\d+\] recurse\(n::Int64\) \(repeats 61 times\)$", tr[5])
+    @test occursin(HERE, tr[6])
+    @test tr[7] == HIDDEN
+    @test aligned(trace_block("recurse(60)"))
 end
 
 @testset "show(err) restores the full trace" begin
@@ -68,7 +119,7 @@ end
         numbers = [parse(Int, m[1]) for m ∈ eachmatch(r"(?m)^ *\[(\d+)\] ", full)]
         @test numbers == 1:length(numbers)
         @test length(numbers) > 5
-        @test occursin(r"(?m)^ *\[1\] zero\(::Type\{Any\}\)$", full)
+        @test occursin(ZERO_FRAME, full)
         @test !occursin('⋮', full)
         @test !occursin(HIDDEN, full)
     end

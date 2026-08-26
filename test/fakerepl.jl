@@ -172,10 +172,46 @@ const TRUNCATED_AND_HIDDEN =
     "Some type information was truncated. Some frames were hidden. " *
     "Use `show(err)` to see complete trace."
 
-"Matches an `@ Module ./file.jl:12` line, given `path` written with `/` separators."
-function at(mod::Union{AbstractString,Nothing}, path::AbstractString; suffix = "")
-    quoted(s) = replace(s, r"[\\^$.|?*+()\[\]{}]" => s"\\\0")
-    modul = mod === nothing ? "" : quoted(mod) * " "
-    return Regex("^ *@ " * modul * replace(quoted(path), '/' => "[/\\\\]") *
-                 ":\\d+" * quoted(suffix) * "\$")
+const PATH_SEP = "[/\\\\]"
+regex_quote(s::AbstractString) = replace(s, r"[\\^$.|?*+()\[\]{}]" => s"\\\0")
+
+#= Base names its own files relative to Julia's source tree rather than absolutely: a bare
+file name from 1.14 on, a `./`-prefixed one before that. Write such a path as `./file.jl` and
+either form matches. =#
+function file_pattern(path::AbstractString)
+    prefix, rest = startswith(path, "./") ? ("(\\." * PATH_SEP * ")?", path[3:end]) : ("", path)
+    return prefix * replace(regex_quote(rest), '/' => PATH_SEP)
 end
+
+"""
+    at(mod, path) -> Regex
+
+Matches an `@ Module file.jl:12` location line, `path` written with `/` separators. A trailing
+`[inlined]` is accepted, since whether Base inlines a given call is not something these tests
+should pin down.
+"""
+at(mod::Union{AbstractString,Nothing}, path::AbstractString) =
+    Regex("^ *@ " * (mod === nothing ? "" : regex_quote(mod) * " ") *
+          file_pattern(path) * ":\\d+( \\[inlined\\])?\$")
+
+"""
+    at_inlined(mod, path) -> Regex
+
+[`at`](@ref) for a frame that is always inlined, where the `[inlined]` marker is required.
+Before 1.14 an inlined frame carried no module of its own, so the module is optional.
+"""
+at_inlined(mod::AbstractString, path::AbstractString) =
+    Regex("^ *@ (" * regex_quote(mod) * " )?" * file_pattern(path) * ":\\d+ \\[inlined\\]\$")
+
+"""
+    omitted(modules...) -> Regex
+
+Matches an `⋮ internal @ ...` summary naming exactly `modules`. Before 1.14 inlined frames
+carried no module, which the summary reported as `Unknown`, so a trailing one is accepted.
+"""
+omitted(modules::AbstractString...) =
+    Regex("^ *⋮ internal @ " * join(regex_quote.(modules), ", ") * "(, Unknown)?\$")
+
+# 1.14 renders `Type{Any}` as `Core.TypeEgal{Any}`, so match `zero` by name alone
+const ZERO_FRAME = r"(?m)^ *\[\d+\] zero\("
+const ZERO_CALL = "zero("
