@@ -60,7 +60,7 @@ end
 end
 
 # `@ Main <this file>:12`, without the module when the frame was inlined (before 1.14)
-const HERE = Regex("^ *@ (Main )?.*" * regex_quote(basename(@__FILE__)) * ":\\d+( \\[inlined\\])?\$")
+const HERE = Regex("^ *│? *@ (Main )?.*" * regex_quote(basename(@__FILE__)) * ":\\d+( \\[inlined\\])?\$")
 
 #= A user → Base → user call chain. Defined here rather than typed at the prompt so the frames
 come from a file, which is the ordinary case; a recursive self-reference also needs a settled
@@ -95,18 +95,27 @@ end
 
 @testset "deep recursion" begin
     #= 61 frames of `recurse` push the trace past `BIG_STACKTRACE_SIZE`, which is where Base's
-    own display switches to cycle detection. An abbreviated trace collapses them itself and
-    keeps the pre-1.13 `(repeats n times)` annotation, because the bracket notation 1.13
-    introduced cannot span the gaps abbreviation leaves behind. =#
-    tr = lines(trace_block("recurse(60)"))
-    @test length(tr) == 7
+    own display switches to cycle detection. An abbreviated trace collapses the repeat itself,
+    and renders it the way the running Julia does — bracketed from 1.13 on — alongside the `⋮`
+    standing in for the Base frames below it. =#
+    trace = trace_block("recurse(60)")
+    tr = lines(trace)
     @test occursin(omitted("Base"), tr[2])
     @test occursin(r"^ *\[\d+\] sum\b", tr[3])
     @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
-    @test occursin(r"^ *\[\d+\] recurse\(n::Int64\) \(repeats 61 times\)$", tr[5])
-    @test occursin(HERE, tr[6])
-    @test tr[7] == HIDDEN
-    @test aligned(trace_block("recurse(60)"))
+    if CYCLE_BRACKETS
+        @test length(tr) == 8
+        @test occursin(r"^ ┌ *\[\d+\] recurse\(n::Int64\)$", tr[5])
+        @test occursin(HERE, tr[6])
+        @test occursin(r"^ ╰─* repeated 61 times$", tr[7])
+        @test tr[8] == HIDDEN
+    else
+        @test length(tr) == 7
+        @test occursin(r"^ *\[\d+\] recurse\(n::Int64\) \(repeats 61 times\)$", tr[5])
+        @test occursin(HERE, tr[6])
+        @test tr[7] == HIDDEN
+    end
+    @test aligned(trace)
 end
 
 @testset "show(err) restores the full trace" begin

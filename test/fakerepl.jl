@@ -119,8 +119,15 @@ end
 "The trailing `Stacktrace:` section of [`error_block`](@ref)."
 trace_block(inputs::AbstractString...) = trace_section(error_block(inputs...))
 
-const FRAME = r"^ *\[\d+\] "
-const FRAME_NUMBER = r"^ *\[\d+\]"
+# 1.13 replaced the inline `(repeats n times)` annotation with a bracket drawn in a gutter
+const CYCLE_BRACKETS = VERSION ≥ v"1.13.0-rc3"
+
+#= A frame inside a bracketed repeat carries `┌` in the gutter, and its location line `│`. Both
+occupy the column the frame number would otherwise be padded into, so they count towards the
+frame-number field rather than sitting outside it. =#
+const FRAME = r"^ [┌ ]*\[\d+\] "
+const FRAME_NUMBER = r"^ [┌ ]*\[\d+\]"
+const CLOSING = r"^ ╰─* repeated \d+ times$"
 
 """
     lines(block) -> Lines
@@ -142,11 +149,14 @@ Base.show(io::IO, l::Lines) = print(io, join(l.v, '\n'))
 Check the indentation contract of an abbreviated trace. Writing `col` for the column the
 frame numbers end in, `⋮` markers sit at `col + 2`, every frame number is right-aligned to
 `col`, and every `@ Module file:line` continuation starts at `col`. `col` is taken from the
-first `⋮` line when there is one, so a frame indented for a different number width fails.
+first `⋮` line when there is one, so a frame indented for a different number width fails. A
+`╰─ repeated n times` closing runs its rule out to `col` as well.
 """
 function aligned(block::AbstractString)
     ls = split(block, '\n')
     indent(l) = length(match(r"^ *", l).match)
+    # A location line inside a bracketed repeat carries `│` where its indentation would be
+    location(l) = replace(l, r"^ │" => "  ")
     omitted = findfirst(l -> contains(l, '⋮'), ls)
     col = if omitted === nothing
         frames = filter(l -> contains(l, FRAME), ls)
@@ -160,8 +170,10 @@ function aligned(block::AbstractString)
             length(match(FRAME_NUMBER, l).match) == col || return false
         elseif contains(l, '⋮')
             indent(l) == col + 1 || return false
-        elseif startswith(l, r" *@ ")
-            indent(l) == col - 1 || return false
+        elseif contains(l, CLOSING)
+            length(match(r"^ ╰─*", l).match) == col || return false
+        elseif startswith(location(l), r" *@ ")
+            indent(location(l)) == col - 1 || return false
         end
     end
     return true

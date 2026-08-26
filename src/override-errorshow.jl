@@ -77,7 +77,8 @@ if VERSION ≥ v"1.13.0-rc3"
         try invokelatest(update_stackframes_callback[], filtered) catch end
 
         if hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
-            show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix)
+            show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix,
+                total_frames = nframes)
         else
             # Find repeated cycles if trace is too long
             if length(filtered) > BIG_STACKTRACE_SIZE

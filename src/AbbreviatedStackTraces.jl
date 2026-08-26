@@ -33,6 +33,10 @@ if isassigned(Base.REPL_MODULE_REF) && nameof(Base.REPL_MODULE_REF[]) == :REPL
     include("../ext/AbbrvStackTracesREPLExt.jl")
 end
 
+#= 1.13 replaced the inline `(repeats n times)` annotation with cycle brackets drawn in a
+gutter to the left of the frame numbers. =#
+const HAS_CYCLE_BRACKETS = VERSION ≥ v"1.13.0-rc3"
+
 is_repl(path) = startswith(path, r"(.[/\\])?REPL")
 is_julia_dev(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
 #= Frames from Base and Core name a file relative to Julia's own source tree instead of an
@@ -133,19 +137,34 @@ function find_visible_frames(trace::Vector)
     end
 
     if length(visible_frames_i) > 0 && visible_frames_i[end] == length(trace)
-        # remove REPL-based top-level
-        # note: file field for top-level is different from the rest, doesn't include ./
-        startswith(String(trace[end][1].file), "REPL") && pop!(visible_frames_i)
+        #= Remove REPL-based top-level. Frames for functions defined at the prompt name the
+        same pseudo-file as the top-level frame does — before 1.14 only the top-level one
+        lacked a `./` prefix, so being top-level has to be checked outright, or a user's own
+        function gets dropped whenever it is the last frame in the trace. =#
+        frame = trace[end][1]
+        is_top_level_frame(frame) && is_repl(String(frame.file)) && pop!(visible_frames_i)
     end
 
     return visible_frames_i
 end
 
-function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix = nothing)
+function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix = nothing,
+                                total_frames::Int = length(trace))
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
     num_frames = length(trace)
-    ndigits_max = ndigits(num_frames)
+
+    # select frames from user-controlled code and optionally public frames
+    is = find_visible_frames(trace)
+
+    num_vis_frames = length(is)
+
+    #= Frame numbers are right-aligned to the width of the trace's whole frame count, repeats
+    included, the way Base aligns its own — `total_frames` is that count, which is why it comes
+    in rather than being `length(trace)` from 1.13 on. A bracketed repeat also reserves one
+    gutter column to the left of every frame, so the `⋮` markers move over with them. =#
+    ndigits_max = ndigits(total_frames)
+    gutter = HAS_CYCLE_BRACKETS && any(i -> trace[i][2] > 1, is) ? 1 : 0
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
@@ -154,7 +173,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, p
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         prefix === nothing || print(io, prefix)
-        print(io, " " ^ (ndigits_max + 4))
+        print(io, " " ^ (ndigits_max + 4 + gutter))
         printstyled(io, "⋮ ", bold = true)
         if VERSION ≥ v"1.10-alpha"
             printstyled(io, "internal", color = :light_black, italic=true)
@@ -193,11 +212,6 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, p
         end
     end
 
-    # select frames from user-controlled code and optionally public frames
-    is = find_visible_frames(trace)
-    
-    num_vis_frames = length(is)
-
     if num_vis_frames > 0
         println(io)
         prefix === nothing || print(io, prefix)
@@ -215,7 +229,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, p
                 print_omitted_modules(lasti + 1, i - 1)
             end
             println(io)
-            print_compact_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler; prefix)
+            print_compact_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, gutter, modulecolordict, modulecolorcycler; prefix)
             if i < num_frames - 1
                 print_linebreaks && println(io)
             end
@@ -251,57 +265,54 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, p
     end
 end
 
-@static if VERSION ≥ v"1.13.0-rc3"
-    #= 1.13 dropped the frame-repetition count from `Base.print_stackframe` in favor of
-    drawing cycle brackets around repeated frames, which can't span the gaps an
-    abbreviated trace leaves behind. Render the frame ourselves instead, keeping the
-    pre-1.13 `(repeats n times)` annotation. =#
-    function print_compact_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix = nothing)
-        file, line = string(frame.file), frame.line
+minimal_frames() = parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
 
+@static if HAS_CYCLE_BRACKETS
+    #= A repeated frame is the only kind of cycle an abbreviated trace can show. Base's
+    multi-frame cycles would have to bracket frames the abbreviation may have dropped, so
+    `show_backtrace` never runs cycle detection on this path; a single repeated entry, though,
+    brackets in place. Base draws both the frame and the closing line, so the gutter and the
+    frame-number column stay Base's arithmetic rather than a copy of it. =#
+    function print_compact_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, gutter, modulecolordict, modulecolorcycler; prefix = nothing)
+        cycles = n > 1 ? 1 : 0
+        if minimal_frames()
+            print_minimal_stackframe(io, i, frame, ndigits_max, gutter, cycles, modulecolordict, modulecolorcycler; prefix)
+        else
+            Base.print_stackframe(io, i, frame, ndigits_max, gutter, cycles, cycles,
+                modulecolordict, modulecolorcycler; prefix)
+        end
+        n > 1 && Base._backtrace_print_repetition_closings!(
+            io, i, NTuple{4, Int}[(i, 1, n, n - 1)], i, gutter, cycles, ndigits_max; prefix)
+        return nothing
+    end
+
+    #= `JULIA_STACKTRACE_MINIMAL` folds the location onto the frame's own line, which Base has
+    no printer for; the frame-number column is still Base's. =#
+    function print_minimal_stackframe(io, i, frame::StackFrame, ndigits_max, gutter, cycles, modulecolordict, modulecolorcycler; prefix = nothing)
         # Used by the REPL to make it possible to open
         # the location of a stackframe/method in the editor.
         if haskey(io, :last_shown_line_infos)
             push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
         end
 
-        inlined = getfield(frame, :inlined)
         modul = parentmodule(frame)
         modulecolor = get_modulecolor!(modulecolordict, modul, modulecolorcycler)
 
-        digit_align_width = ndigits_max + 2
-
-        # frame number
         prefix === nothing || print(io, prefix)
-        print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
         print(io, " ")
-
-        minimal = parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
-        if minimal
-            show_spec_linfo_minimal(IOContext(io, :backtrace=>true), frame)
-        else
-            Base.StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
-        end
-        if n > 1
-            printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
-        end
-
-        # @ Module path / file : line
-        if minimal
-            print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = 1)
-        else
-            println(io)
-            prefix === nothing || print(io, prefix)
-            print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
-        end
-
-        # inlined
-        printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+        printstyled(io, "┌" ^ cycles, color = :light_black)
+        print(io, lpad("[" * string(i) * "]", ndigits_max + 2 + gutter - cycles), " ")
+        show_spec_linfo_minimal(IOContext(io, :backtrace => true), frame)
+        print_module_path_file(io, modul, string(frame.file), frame.line;
+            modulecolor, digit_align_width = 1)
+        printstyled(io, getfield(frame, :inlined) ? " [inlined]" : "", color = :light_black)
     end
 else
-    # `Base.print_stackframe` handles `JULIA_STACKTRACE_MINIMAL` itself via the override in
-    # `override-errorshow.jl`, and abbreviated traces never carry a prefix before 1.13.
-    print_compact_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix = nothing) =
+    #= Before 1.13 Base annotated a repeated frame inline as `(repeats n times)` and reserved
+    no gutter, so there is nothing to pass along. `Base.print_stackframe` does that, and the
+    override in `override-errorshow.jl` handles `JULIA_STACKTRACE_MINIMAL`; abbreviated traces
+    never carry a prefix before 1.13 either. =#
+    print_compact_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, gutter, modulecolordict, modulecolorcycler; prefix = nothing) =
         Base.print_stackframe(io, i, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
 end
 
