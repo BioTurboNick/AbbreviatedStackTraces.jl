@@ -91,9 +91,9 @@ end
 end
 
 @testset "a cycle spanning internal frames" begin
-    #= Frames a cycle covers are kept even when they are internal, because a bracket cannot
-    span a gap. Abbreviation still applies everywhere else in the trace: `hop_b` sits away from
-    any user frame, so nothing else would keep it, and the tail collapses either way. =#
+    #= Internal frames inside a cycle are dropped like any other, and the `⋮` standing in for
+    them carries the bracket across. `hop_b` sits away from any user frame, so nothing else
+    would keep it. =#
     hop(name) = (frame(name, "abstractarray.jl"), 1)
     trace = Any[(frame(:mapreduce_impl, "reduce.jl"), 1),
                 (frame(:user_inner, "REPL[1]"), 1),
@@ -109,13 +109,15 @@ end
 
     covered = compact(trace; cycles = [(2, 5, 50)])
     if CYCLE_BRACKETS
-        @test occursin("hop_b", covered)
-        # Nothing is elided between the frames a bracket covers
+        @test !occursin("hop_b", covered)
         bracketed = [l for l ∈ split(covered, '\n') if startswith(l, r" [┌├│╰]")]
-        @test !any(l -> occursin('⋮', l), bracketed)
-        @test count(l -> occursin(FRAME, l), bracketed) == 5
-        # ...while the tail outside it is still abbreviated
-        @test occursin('⋮', covered)
+        # The bracket opens on the first frame of the cycle still shown and closes on the last
+        @test occursin(r"^ ┌ *\[2\] user_inner$", first(bracketed))
+        @test occursin(r"^ ╰─+ repeated 50 times$", last(bracketed))
+        # The ⋮ standing in for what was dropped from the middle carries the bracket across
+        @test any(l -> occursin(r"^ │ +⋮ internal", l), bracketed)
+        # ...and the tail outside the cycle is abbreviated with no bracket at all
+        @test occursin(r"(?m)^ {2,}⋮ internal", covered)
         @test !occursin("tail_b", covered)
     end
     @test aligned(covered)

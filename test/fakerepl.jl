@@ -156,26 +156,28 @@ first `⋮` line when there is one, so a frame indented for a different number w
 function aligned(block::AbstractString)
     ls = split(block, '\n')
     indent(l) = length(match(r"^ *", l).match)
-    # A location line inside a bracketed repeat carries `│` where its indentation would be
-    location(l) = replace(l, r"^ │+" => m -> " "^length(m))
+    #= A line inside a bracketed repeat that is not itself a frame — its location, or a `⋮`
+    standing in for frames dropped from the middle of it — carries `│` where its indentation
+    would otherwise be, at one column per level of nesting. =#
+    ungutter(l) = replace(l, r"^ │+" => m -> " "^length(m))
     omitted = findfirst(l -> contains(l, '⋮'), ls)
     col = if omitted === nothing
         frames = filter(l -> contains(l, FRAME), ls)
         isempty(frames) && return false
         maximum(l -> length(match(FRAME_NUMBER, l).match), frames)
     else
-        indent(ls[omitted]) - 1
+        indent(ungutter(ls[omitted])) - 1
     end
     for l ∈ ls
         if contains(l, FRAME)
             length(match(FRAME_NUMBER, l).match) == col || return false
         elseif contains(l, '⋮')
-            indent(l) == col + 1 || return false
+            indent(ungutter(l)) == col + 1 || return false
         elseif contains(l, CLOSING)
             # However deep the nesting, the rule runs out to the frame-number column
             length(match(r"^ │*╰─*", l).match) == col || return false
-        elseif startswith(location(l), r" *@ ")
-            indent(location(l)) == col - 1 || return false
+        elseif startswith(ungutter(l), r" *@ ")
+            indent(ungutter(l)) == col - 1 || return false
         end
     end
     return true

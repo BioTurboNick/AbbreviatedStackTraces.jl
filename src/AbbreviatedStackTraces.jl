@@ -159,35 +159,63 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, p
     # select frames from user-controlled code and optionally public frames
     is = find_visible_frames(trace)
 
-    #= A cycle brackets a run of frames, and a bracket cannot span a gap, so every frame one
-    covers is kept. A cycle is also why the trace was long enough for Base to go looking in the
-    first place, which makes it the part of the trace a reader most needs to see. Base records a
-    cycle's start and length against the frames it had collapsed so far, which can reach past
-    either end of the trace it returns, so the span is clamped to it. =#
-    for (start, len, _) ∈ repeated_cycles
-        union!(is, max(firstindex(trace), start):min(lastindex(trace), start + len - 1))
-    end
-    sort!(is)
     shown = Set(is)
     num_vis_frames = length(is)
+
+    #= A cycle is bracketed around the frames of it that survive abbreviation: internal frames
+    inside one are dropped like any other, and the `⋮` standing in for them carries the bracket
+    across. So a cycle opens on the first frame of its span still being shown and closes on the
+    last, and one with nothing left of it is not drawn at all. `span` stays the whole thing
+    either way, because the frames a cycle stands for are counted over all of it.
+
+    Base records a cycle's start and length against the frames it had collapsed so far, which
+    can reach past either end of the trace it hands back, so the span is clamped to it. =#
+    cycles = @NamedTuple{span::UnitRange{Int}, opens::Int, closes::Int, reps::Int}[]
+    for (start, len, reps) ∈ repeated_cycles
+        span = max(firstindex(trace), start):min(lastindex(trace), start + len - 1)
+        drawn = filter(∈(shown), span)
+        isempty(drawn) && continue
+        push!(cycles, (; span, opens = first(drawn), closes = last(drawn), reps))
+    end
+    repeats_shown = any(i -> trace[i][2] > 1, is)
+
+    #= How many frames one turn round each cycle stands for, the repetitions of any cycle nested
+    inside it included. Measured innermost-first so a cycle is already measured by the time the
+    one enclosing it needs it, and the first cycle to enclose one claims it, which is the one it
+    is immediately inside. =#
+    spanned = zeros(Int, length(cycles))
+    claimed = falses(length(cycles))
+    order = sortperm(cycles, by = c -> length(c.span))
+    for (pos, k) ∈ enumerate(order)
+        spanned[k] = sum(j -> trace[j][2], cycles[k].span; init = 0)
+        for m ∈ @view order[1:(pos - 1)]
+            (!claimed[m] && cycles[m].span ⊆ cycles[k].span) || continue
+            claimed[m] = true
+            spanned[k] += (cycles[m].reps - 1) * spanned[m]
+        end
+    end
 
     #= Frame numbers are right-aligned to the width of the trace's whole frame count, repeats
     included, the way Base aligns its own — `total_frames` is that count, which is why it comes
     in rather than being `length(trace)` from 1.13 on. Cycle brackets are drawn in a gutter to
-    the left of the numbers, a column per level of nesting, and the `⋮` markers move over with
-    them. =#
+    the left of the numbers, as many columns as Base nested them deep, and the `⋮` markers move
+    over with them. =#
     ndigits_max = ndigits(total_frames)
-    gutter = max(max_nested_cycles,
-        HAS_CYCLE_BRACKETS && any(i -> trace[i][2] > 1, is) ? 1 : 0)
+    drawing_cycles = HAS_CYCLE_BRACKETS && (!isempty(cycles) || repeats_shown)
+    gutter = drawing_cycles ? max(max_nested_cycles, 1) : 0
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
-    function print_omitted_modules(i, j)
+    #= `depth` is how many cycles are open across the omitted frames; their brackets carry on
+    down the gutter past the `⋮`, which still lands in the column it would without them. =#
+    function print_omitted_modules(i, j, depth = 0)
         # Find modules involved in intermediate frames and print them
         modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         prefix === nothing || print(io, prefix)
-        print(io, " " ^ (ndigits_max + 4 + gutter))
+        print(io, " ")
+        printstyled(io, "│" ^ depth, color = :light_black)
+        print(io, " " ^ (ndigits_max + 3 + gutter - depth))
         printstyled(io, "⋮ ", bold = true)
         if VERSION ≥ v"1.10-alpha"
             printstyled(io, "internal", color = :light_black, italic=true)
@@ -236,50 +264,63 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, p
             print_omitted_modules(1, is[1] - 1)
         end
 
-        #= Walk the whole trace, not just the visible frames: Base numbers a frame by how many
-        frames precede it, repeats counted, and a cycle has to be opened and closed on the
-        frames Base would open and close it on. =#
-        pending = copy(repeated_cycles)
-        open_cycles = NTuple{4, Int}[]
-        frame_counter = 1
+        #= Walk the whole trace, not just the frames shown: Base numbers a frame by how many
+        frames come before it with every repetition counted, so the hidden ones and the turns a
+        closed cycle stands for both have to be counted past. A cycle's repetitions only start
+        counting once it has closed, which is what numbers the frames it brackets as the first
+        turn round it. =#
+        open_cycles = @NamedTuple{closes::Int, reps::Int, spanned::Int}[]
+        preceding = 0
         lasti = first(is)
         for i ∈ eachindex(trace)
             n = trace[i][2]
-            if i ∉ shown
-                frame_counter += n
-                continue
-            end
-            if i > lasti + 1
+            if i ∈ shown
+                if i > lasti + 1
+                    println(io)
+                    print_omitted_modules(lasti + 1, i - 1, length(open_cycles))
+                end
+
+                ncycle_starts = 0
+                if drawing_cycles
+                    for k ∈ eachindex(cycles)
+                        cycles[k].opens == i || continue
+                        push!(open_cycles, (; cycles[k].closes, cycles[k].reps, spanned = spanned[k]))
+                        ncycle_starts += 1
+                    end
+                    # A frame repeated on its own opens and closes a cycle of one
+                    if n > 1
+                        push!(open_cycles, (; closes = i, reps = n, spanned = 1))
+                        ncycle_starts += 1
+                    end
+                end
+                nactive_cycles = length(open_cycles)
+
                 println(io)
-                print_omitted_modules(lasti + 1, i - 1)
+                print_compact_stackframe(io, frame_number(1 + preceding, i), trace[i][1], n,
+                    ndigits_max, gutter, nactive_cycles, ncycle_starts,
+                    modulecolordict, modulecolorcycler; prefix)
+
+                #= Close innermost-first, one at a time. Base's closing printer would otherwise
+                adjust the cycles still open by spans it measured against the trace it
+                collapsed, and these are measured against the frames actually drawn. =#
+                while !isempty(open_cycles) && open_cycles[end].closes == i
+                    closing = pop!(open_cycles)
+                    # Base's printer takes a start and a length, and counts frames itself
+                    _, nactive_cycles = close_cycles!(io, i,
+                        NTuple{4, Int}[(i, 1, closing.reps, 0)], 0,
+                        gutter, nactive_cycles, ndigits_max; prefix)
+                end
+                lasti = i
             end
 
-            #= `≤` rather than Base's `==`: every frame a cycle covers is kept, so a cycle
-            cannot open on a hidden frame, but were that ever to change the cycle would open
-            late instead of jamming the queue and swallowing the ones behind it. =#
-            ncycle_starts = 0
-            while !isempty(pending) && first(pending)[1] ≤ i
-                cycle = popfirst!(pending)
-                push!(open_cycles, (cycle..., cycle[2] * (cycle[3] - 1)))
-                ncycle_starts += 1
+            preceding += n
+            # Once past a cycle, the turns it stands for count towards what follows
+            for k ∈ eachindex(cycles)
+                last(cycles[k].span) == i && (preceding += (cycles[k].reps - 1) * spanned[k])
             end
-            if n > 1
-                push!(open_cycles, (i, 1, n, n - 1))
-                ncycle_starts += 1
-            end
-            nactive_cycles = length(open_cycles)
-
-            println(io)
-            print_compact_stackframe(io, frame_number(frame_counter, i), trace[i][1], n,
-                ndigits_max, gutter, nactive_cycles, ncycle_starts,
-                modulecolordict, modulecolorcycler; prefix)
-            frame_counter, nactive_cycles = close_cycles!(io, i, open_cycles, frame_counter,
-                gutter, nactive_cycles, ndigits_max; prefix)
-            frame_counter += 1
-            if i < num_frames - 1
+            if i ∈ shown && i < num_frames - 1
                 print_linebreaks && println(io)
             end
-            lasti = i
         end
 
         # print if frames other than top-level were omitted
