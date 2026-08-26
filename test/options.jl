@@ -42,6 +42,48 @@ end
     @test tr[4] == HIDDEN
 end
 
+minimal_kwfun(x; k = 1, j...) = sum([])
+struct MinimalCallable{T} end
+(::MinimalCallable{T})(x; k = 1) where {T} = sum([])
+
+"The frames of `f()`'s backtrace that Julia compiled as keyword-argument body methods."
+function kwargs_frames(f)
+    bt = try
+        f()
+        nothing
+    catch
+        catch_backtrace()
+    end
+    bt === nothing && error("expected an exception")
+    return filter(first.(Base.process_backtrace(stacktrace(bt)))) do frame
+        m = AbbreviatedStackTraces.frame_method(frame)
+        m isa Method && m.nkw > 0
+    end
+end
+
+@testset "minimal mode names frames the way Base does" begin
+    #= Minimal mode drops a frame's signature, not its name, so the name it prints has to be
+    the one Base would use. Keyword-argument methods are the case worth pinning: they are
+    compiled under a mangled `#f#123`, and Base does not name such a frame after the method
+    either — it reads the function out of the signature. Whatever Base's full display prints,
+    the minimal name must be the call it opens with. =#
+    render(frame, f) = sprint(f, frame; context = :backtrace => true)
+    checked = 0
+    for f ∈ (() -> minimal_kwfun(1; k = 2, extra = 3), () -> MinimalCallable{Int}()(1; k = 2))
+        for frame ∈ kwargs_frames(f)
+            full = render(frame, Base.StackTraces.show_spec_linfo)
+            mini = render(frame, AbbreviatedStackTraces.show_spec_linfo_minimal)
+            @test startswith(full, mini * "(")
+            @test !startswith(mini, '#')
+            checked += 1
+        end
+    end
+    #= Only 1.14 reaches this: before it, `process_backtrace` collapsed the body method into
+    the plainly-named frame, so no mangled name ever arrived. Guard against the assertions
+    above quietly becoming vacuous on the one version that needs them. =#
+    VERSION < v"1.14.0-DEV" || @test checked > 0
+end
+
 @testset "JULIA_STACKTRACE_PUBLIC" begin
     # `zero` is public in Base, so its frame comes back even though Base is internal
     @test !occursin(ZERO_CALL, trace_block("sum([])"))
