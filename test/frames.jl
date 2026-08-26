@@ -89,3 +89,34 @@ end
     @test occursin("only_f", before_start)
     @test occursin("only_g", before_start)
 end
+
+@testset "a cycle spanning internal frames" begin
+    #= Frames a cycle covers are kept even when they are internal, because a bracket cannot
+    span a gap. Abbreviation still applies everywhere else in the trace: `hop_b` sits away from
+    any user frame, so nothing else would keep it, and the tail collapses either way. =#
+    hop(name) = (frame(name, "abstractarray.jl"), 1)
+    trace = Any[(frame(:mapreduce_impl, "reduce.jl"), 1),
+                (frame(:user_inner, "REPL[1]"), 1),
+                hop(:hop_c), hop(:hop_b), hop(:hop_a),
+                (frame(:user_outer, "REPL[1]"), 1),
+                (frame(:tail_c, "client.jl"), 1), (frame(:tail_b, "client.jl"), 1),
+                (frame(:tail_a, "client.jl"), 1),
+                (frame(:user_caller, "REPL[1]"), 1)]
+
+    # Without a cycle over it, `hop_b` is hidden like any other internal frame
+    @test !occursin("hop_b", compact(trace))
+    @test occursin('⋮', compact(trace))
+
+    covered = compact(trace; cycles = [(2, 5, 50)])
+    if CYCLE_BRACKETS
+        @test occursin("hop_b", covered)
+        # Nothing is elided between the frames a bracket covers
+        bracketed = [l for l ∈ split(covered, '\n') if startswith(l, r" [┌├│╰]")]
+        @test !any(l -> occursin('⋮', l), bracketed)
+        @test count(l -> occursin(FRAME, l), bracketed) == 5
+        # ...while the tail outside it is still abbreviated
+        @test occursin('⋮', covered)
+        @test !occursin("tail_b", covered)
+    end
+    @test aligned(covered)
+end

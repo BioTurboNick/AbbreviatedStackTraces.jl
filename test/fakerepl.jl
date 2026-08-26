@@ -122,12 +122,13 @@ trace_block(inputs::AbstractString...) = trace_section(error_block(inputs...))
 # 1.13 replaced the inline `(repeats n times)` annotation with a bracket drawn in a gutter
 const CYCLE_BRACKETS = VERSION ≥ v"1.13.0-rc3"
 
-#= A frame inside a bracketed repeat carries `┌` in the gutter, and its location line `│`. Both
-occupy the column the frame number would otherwise be padded into, so they count towards the
+#= A frame inside a bracketed repeat carries the gutter: `┌` where a cycle opens, `├` where one
+carries on, `│` for a level of nesting outside it, and `│` again on its location line. All of
+them occupy columns the frame number would otherwise be padded into, so they count towards the
 frame-number field rather than sitting outside it. =#
-const FRAME = r"^ [┌ ]*\[\d+\] "
-const FRAME_NUMBER = r"^ [┌ ]*\[\d+\]"
-const CLOSING = r"^ ╰─* repeated \d+ times$"
+const FRAME = r"^ [┌├│ ]*\[\d+\] "
+const FRAME_NUMBER = r"^ [┌├│ ]*\[\d+\]"
+const CLOSING = r"^ │*╰─* repeated \d+ times$"
 
 """
     lines(block) -> Lines
@@ -156,7 +157,7 @@ function aligned(block::AbstractString)
     ls = split(block, '\n')
     indent(l) = length(match(r"^ *", l).match)
     # A location line inside a bracketed repeat carries `│` where its indentation would be
-    location(l) = replace(l, r"^ │" => "  ")
+    location(l) = replace(l, r"^ │+" => m -> " "^length(m))
     omitted = findfirst(l -> contains(l, '⋮'), ls)
     col = if omitted === nothing
         frames = filter(l -> contains(l, FRAME), ls)
@@ -171,7 +172,8 @@ function aligned(block::AbstractString)
         elseif contains(l, '⋮')
             indent(l) == col + 1 || return false
         elseif contains(l, CLOSING)
-            length(match(r"^ ╰─*", l).match) == col || return false
+            # However deep the nesting, the rule runs out to the frame-number column
+            length(match(r"^ │*╰─*", l).match) == col || return false
         elseif startswith(location(l), r" *@ ")
             indent(location(l)) == col - 1 || return false
         end
