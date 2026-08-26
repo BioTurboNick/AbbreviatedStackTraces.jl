@@ -119,8 +119,16 @@ end
 "The trailing `Stacktrace:` section of [`error_block`](@ref)."
 trace_block(inputs::AbstractString...) = trace_section(error_block(inputs...))
 
-const FRAME = r"^ *\[\d+\] "
-const FRAME_NUMBER = r"^ *\[\d+\]"
+# 1.13 replaced the inline `(repeats n times)` annotation with a bracket drawn in a gutter
+const CYCLE_BRACKETS = VERSION ≥ v"1.13.0-rc3"
+
+#= A frame inside a bracketed repeat carries the gutter: `┌` where a cycle opens, `├` where one
+carries on, `│` for a level of nesting outside it, and `│` again on its location line. All of
+them occupy columns the frame number would otherwise be padded into, so they count towards the
+frame-number field rather than sitting outside it. =#
+const FRAME = r"^ [┌├│ ]*\[\d+\] "
+const FRAME_NUMBER = r"^ [┌├│ ]*\[\d+\]"
+const CLOSING = r"^ │*╰─* repeated \d+ times$"
 
 """
     lines(block) -> Lines
@@ -142,26 +150,35 @@ Base.show(io::IO, l::Lines) = print(io, join(l.v, '\n'))
 Check the indentation contract of an abbreviated trace. Writing `col` for the column the
 frame numbers end in, `⋮` markers sit at `col + 2`, every frame number is right-aligned to
 `col`, and every `@ Module file:line` continuation starts at `col`. `col` is taken from the
-first `⋮` line when there is one, so a frame indented for a different number width fails.
+first `⋮` line when there is one, so a frame indented for a different number width fails. A
+`╰─ repeated n times` closing runs its rule out to `col` as well.
 """
 function aligned(block::AbstractString)
     ls = split(block, '\n')
     indent(l) = length(match(r"^ *", l).match)
+    #= A line inside a bracketed repeat that is not itself a frame — its location, or a `⋮`
+    standing in for frames dropped from it — carries the gutter where its indentation would
+    otherwise be, at one column per level of nesting. A cycle whose frames were all dropped opens
+    on the `⋮` itself, so that can be a `┌` rather than a `│`. =#
+    ungutter(l) = replace(l, r"^ [│┌]+" => m -> " "^length(m))
     omitted = findfirst(l -> contains(l, '⋮'), ls)
     col = if omitted === nothing
         frames = filter(l -> contains(l, FRAME), ls)
         isempty(frames) && return false
         maximum(l -> length(match(FRAME_NUMBER, l).match), frames)
     else
-        indent(ls[omitted]) - 1
+        indent(ungutter(ls[omitted])) - 1
     end
     for l ∈ ls
         if contains(l, FRAME)
             length(match(FRAME_NUMBER, l).match) == col || return false
         elseif contains(l, '⋮')
-            indent(l) == col + 1 || return false
-        elseif startswith(l, r" *@ ")
-            indent(l) == col - 1 || return false
+            indent(ungutter(l)) == col + 1 || return false
+        elseif contains(l, CLOSING)
+            # However deep the nesting, the rule runs out to the frame-number column
+            length(match(r"^ │*╰─*", l).match) == col || return false
+        elseif startswith(ungutter(l), r" *@ ")
+            indent(ungutter(l)) == col - 1 || return false
         end
     end
     return true

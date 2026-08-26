@@ -14,6 +14,14 @@ owner(f, types) = nameof(which(f, types).module)
         (VERSION < v"1.12-alpha" ? :AbbreviatedStackTraces : :Base)
 end
 
+@testset "print_response left to REPL from 1.11 on" begin
+    #= It ships a closure to the backend task, which calls it from a frame entered at REPL
+    startup, so a closure defined here is too new to call whenever the package was loaded at
+    the prompt. From 1.11 on there is a display hook to overwrite instead. =#
+    ours = any(m -> nameof(m.module) === :AbbrvStackTracesREPLExt, methods(REPL.print_response))
+    @test ours == (VERSION < v"1.11")
+end
+
 @testset "REPL hook installed" begin
     #= Whichever function the REPL funnels error display through, it has to reach
     `repl_display_error_abbrv`; that is what installs the `:compacttrace` flag. =#

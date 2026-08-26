@@ -76,16 +76,18 @@ if VERSION ≥ v"1.13.0-rc3"
         # Allow external code to edit information in the frames (e.g. line numbers with Revise)
         try invokelatest(update_stackframes_callback[], filtered) catch end
 
-        if hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
-            show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix)
+        # Find repeated cycles if trace is too long. Both displays render them.
+        if length(filtered) > BIG_STACKTRACE_SIZE
+            filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
         else
-            # Find repeated cycles if trace is too long
-            if length(filtered) > BIG_STACKTRACE_SIZE
-                filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
-            else
-                repeated_cycles = NTuple{3, Int}[]
-                max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
-            end
+            repeated_cycles = NTuple{3, Int}[]
+            max_nested_cycles = any(x -> last(x) > 1, filtered) ? 1 : 0
+        end
+
+        if hide_internal_frames || parse(Bool, get(ENV, "JULIA_STACKTRACE_ABBREVIATED", "false"))
+            show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix,
+                total_frames = nframes, repeated_cycles, max_nested_cycles)
+        else
             show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes,
                 repeated_cycles, max_nested_cycles;
                 print_linebreaks = stacktrace_linebreaks(), prefix)

@@ -7,74 +7,20 @@ const REPL = Base.REPL_MODULE_REF[] # hack because can't otherwise get ref to RE
 import Base:
     MainInclude
 
+#= Overwriting the hook the REPL funnels error display through is enough; `print_response`
+itself must be left alone. It ships a closure to the backend task via `call_on_backend`, and
+`repl_backend_loop` calls that closure as a bare `f()` from a frame entered once at REPL
+startup. Base's own closures were defined when REPL loaded, so they are always old enough;
+one defined here is too new for that frame whenever the package is loaded at the prompt
+rather than before the REPL starts, and displaying any value then fails with a world-age
+`MethodError`. =#
 if VERSION ≥ v"1.13.0-rc3"
     REPL.__repl_entry_display_error(errio::IO, @nospecialize errval) = repl_display_error_abbrv(errio, errval)
-
-    # Need to overwrite to allow the error methods to be called, due to world age
-    function REPL.print_response(errio::IO, response, backend::Union{REPL.REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{REPL.AbstractDisplay,Nothing}=nothing)
-        Base.sigatomic_begin()
-        val, iserr = response
-        if !iserr
-            # display result
-            try
-                if val !== nothing && show_value
-                    Base.sigatomic_end() # allow display to be interrupted
-                    val_to_show = val
-                    val2, iserr = if specialdisplay === nothing
-                        # display calls may require being run on the main thread
-                        REPL.call_on_backend(backend) do
-                            REPL.__repl_entry_display(val_to_show)
-                        end
-                    else
-                        REPL.call_on_backend(backend) do
-                            REPL.__repl_entry_display(specialdisplay, val_to_show)
-                        end
-                    end
-                    Base.sigatomic_begin()
-                    if iserr
-                        println(errio)
-                        println(errio, "Error showing value of type ", typeof(val), ":")
-                        val = val2
-                    end
-                end
-            catch ex
-                println(errio)
-                println(errio, "SYSTEM (REPL): showing a value caused an error")
-                val = current_exceptions()
-                iserr = true
-            end
-        end
-        if iserr
-            # print error
-            iserr = false
-            while true
-                try
-                    Base.sigatomic_end() # allow stacktrace printing to be interrupted
-                    val = Base.scrub_repl_backtrace(val)
-                    Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                    REPL.__repl_entry_display_error(errio, val)
-                    break
-                catch ex
-                    println(errio) # an error during printing is likely to leave us mid-line
-                    if !iserr
-                        println(errio, "SYSTEM (REPL): showing an error caused an error")
-                        val = current_exceptions()
-                        iserr = true
-                    else
-                        println(errio, "SYSTEM (REPL): caught exception of type ", typeof(ex).name.name,
-                            " while trying to print an exception; giving up")
-                        break
-                    end
-                end
-            end
-        end
-        Base.sigatomic_end()
-        nothing
-    end
 elseif VERSION ≥ v"1.11"
     REPL.repl_display_error(errio::IO, @nospecialize errval) = repl_display_error_abbrv(errio, errval)
 else
-    # Need to overwrite to allow the error methods to be called, due to world age
+    #= No such hook before 1.11, so `print_response` has to be overwritten wholesale. It
+    predates `call_on_backend` and displays on this task, so no closure crosses over. =#
     function REPL.print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
         Base.sigatomic_begin()
         val, iserr = response
