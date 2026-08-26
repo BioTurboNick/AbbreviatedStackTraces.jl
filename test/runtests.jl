@@ -8,6 +8,7 @@ include("fakerepl.jl")
 
 @testset "AbbreviatedStackTraces" begin
     include("overrides.jl")
+    include("paths.jl")
     include("traces.jl")
     include("options.jl")
 end

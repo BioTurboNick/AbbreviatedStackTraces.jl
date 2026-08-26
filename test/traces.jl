@@ -59,9 +59,39 @@ end
     @test aligned(trace)
 end
 
-# Defined here rather than typed at the prompt so the recursive self-reference sits in a
-# settled world age, which 1.12+ warns about otherwise
+# `@ Main <this file>:12`, without the module when the frame was inlined (before 1.14)
+const HERE = Regex("^ *@ (Main )?.*" * regex_quote(basename(@__FILE__)) * ":\\d+( \\[inlined\\])?\$")
+
+#= A user → Base → user call chain. Defined here rather than typed at the prompt so the frames
+come from a file, which is the ordinary case; a recursive self-reference also needs a settled
+world age, which 1.12+ warns about otherwise. =#
+chain_inner(x) = sum([])
+chain_middle(v) = map(chain_inner, v)
+chain_outer() = chain_middle([1])
 recurse(n) = n == 0 ? sum([]) : recurse(n - 1)
+
+@testset "user code kept across internal frames" begin
+    #= Every user frame survives, each contiguous run of them keeps the one frame below it to
+    show what that run called into, and the internal frames separating the runs collapse into
+    a `⋮` of their own. =#
+    trace = trace_block("chain_outer()")
+    tr = lines(trace)
+    @test length(tr) == 14
+    @test occursin(omitted("Base"), tr[2])
+    @test occursin(r"^ *\[\d+\] sum\b", tr[3]) # what chain_inner called into
+    @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
+    @test occursin(r"^ *\[\d+\] chain_inner\b", tr[5])
+    @test occursin(HERE, tr[6])
+    @test occursin(omitted("Base"), tr[7]) # map's internals
+    @test occursin(r"^ *\[\d+\] map\b", tr[8]) # what chain_middle called into
+    @test occursin(at_inlined("Base", "./abstractarray.jl"), tr[9])
+    @test occursin(r"^ *\[\d+\] chain_middle\b", tr[10])
+    @test occursin(HERE, tr[11])
+    @test occursin(r"^ *\[\d+\] chain_outer\(\)$", tr[12])
+    @test occursin(HERE, tr[13])
+    @test tr[14] == HIDDEN
+    @test aligned(trace)
+end
 
 @testset "deep recursion" begin
     #= 61 frames of `recurse` push the trace past `BIG_STACKTRACE_SIZE`, which is where Base's
@@ -74,7 +104,7 @@ recurse(n) = n == 0 ? sum([]) : recurse(n - 1)
     @test occursin(r"^ *\[\d+\] sum\b", tr[3])
     @test occursin(at_inlined("Base", "./reducedim.jl"), tr[4])
     @test occursin(r"^ *\[\d+\] recurse\(n::Int64\) \(repeats 61 times\)$", tr[5])
-    @test occursin(Regex("^ *@ Main .*" * regex_quote(basename(@__FILE__)) * ":\\d+\$"), tr[6])
+    @test occursin(HERE, tr[6])
     @test tr[7] == HIDDEN
     @test aligned(trace_block("recurse(60)"))
 end
