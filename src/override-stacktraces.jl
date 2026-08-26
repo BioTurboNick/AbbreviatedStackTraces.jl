@@ -22,8 +22,40 @@ function show_spec_linfo_minimal(io::IO, frame::StackFrame)
     elseif frame.func === top_level_scope_sym
         print(io, "top-level scope")
     else
-        print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+        kwfunc = kwcall_function_type(frame)
+        if kwfunc === nothing
+            print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+        else
+            Base.show_signature_function(io, kwfunc, #=demangle=#true)
+        end
     end
+end
+
+if VERSION ≥ v"1.12-alpha"
+    frame_method(frame::StackFrame) = Base.StackTraces.frame_method_or_module(frame)
+else
+    function frame_method(frame::StackFrame)
+        linfo = frame.linfo
+        linfo isa Method && return linfo
+        linfo isa MethodInstance && return linfo.def
+        return nothing
+    end
+end
+
+#= A method taking keyword arguments is compiled into a body method named `#f#123`, which
+`demangle_function_name` can't recover an `f` from — it only strips a *trailing* `#123`. Base
+sidesteps this by naming a frame after the type of the function being called rather than after
+the method, which for a body method is the signature slot just past the keywords. Returns
+`nothing` for every other kind of frame, whose own name is the right one to print.
+
+1.14 made this visible: it collapses the plain `sum` frame into the `#sum#892` one, so the
+mangled name is what reaches a minimal trace. =#
+function kwcall_function_type(frame::StackFrame)
+    m = frame_method(frame)
+    m isa Method && m.nkw > 0 || return nothing
+    sig = Base.unwrap_unionall(m.sig)
+    sig isa DataType && length(sig.parameters) > m.nkw + 1 || return nothing
+    return sig.parameters[m.nkw + 2]
 end
 
 if VERSION ≤ v"1.12-alpha"

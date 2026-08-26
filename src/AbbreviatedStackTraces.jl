@@ -35,11 +35,17 @@ end
 
 is_repl(path) = startswith(path, r"(.[/\\])?REPL")
 is_julia_dev(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
+#= Frames from Base and Core name a file relative to Julia's own source tree instead of an
+absolute path: a bare file name from 1.14 on, and a `./`-prefixed one before that. The REPL's
+pseudo-files (`REPL[1]`) are shaped the same way but are user code; they carry no extension.
+Everything a user could write is absolutized by `include`, even from a relative path. =#
+is_base_relative(path) =
+    contains(path, r"[/\\]") ? startswith(path, r".[/\\]") : endswith(path, ".jl")
 is_julia(path) =
-    (startswith(path, r".[/\\]") && !is_repl(path)) ||
+    (is_base_relative(path) && !is_repl(path)) ||
     (contains(path, r"[/\\].julia[/\\]") && !is_julia_dev(path)) ||
     contains(path, r"[/\\]julia[/\\]stdlib[/\\]")
-is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
+is_broadcast(path) = is_base_relative(path) && contains(path, r"(^|[/\\])broadcast\.jl$")
 
 # Process of identifying a visible frame:
 # 1. Identify modules that should be included:

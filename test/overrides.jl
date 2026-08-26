@@ -8,7 +8,10 @@ owner(f, types) = nameof(which(f, types).module)
 @testset "Base overrides installed" begin
     @test owner(Base.show_backtrace, (IO, Vector)) === :AbbreviatedStackTraces
     @test owner(Base.show_exception_stack, (IO, Base.ExceptionStack)) === :AbbreviatedStackTraces
-    @test owner(Base.scrub_repl_backtrace, (Any,)) === :AbbreviatedStackTraces
+    #= `scrub_repl_backtrace` is overridden only where Base cuts the trace in the wrong place.
+    From 1.12 on Base's own is at least as good — 1.14's is better — so it is left alone. =#
+    @test owner(Base.scrub_repl_backtrace, (Any,)) ===
+        (VERSION < v"1.12-alpha" ? :AbbreviatedStackTraces : :Base)
 end
 
 @testset "REPL hook installed" begin
