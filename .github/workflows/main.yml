@@ -15,6 +15,7 @@ jobs:
         version:
           - '1.10'
           - '1.11'
+          - '1.12'
           - 'pre'
           - 'nightly'
         os:
