@@ -118,6 +118,54 @@ end
     @test aligned(trace)
 end
 
+#= Mutual recursion, so the repeating unit is a pair of frames rather than one frame. 101 trips
+round puts the trace past `BIG_STACKTRACE_SIZE`, which is what makes Base go looking for
+cycles. `nest_inner` recurses on `k` as well, giving a cycle nested inside a cycle. =#
+cycle_a(n) = cycle_b(n - 1)
+cycle_b(n) = n < 0 ? error() : cycle_a(n)
+nest_outer(n) = n < 0 ? error() : nest_inner(n, 2)
+nest_inner(n, k) = k == 0 ? nest_outer(n - 1) : nest_inner(n, k - 1)
+
+@testset "multi-frame cycles" begin
+    tr = lines(trace_block("cycle_a(100)"))
+    @test occursin(r"^ *\[1\] error\(\)$", tr[2])
+    @test occursin(at("Base", "./error.jl"), tr[3])
+    if CYCLE_BRACKETS
+        #= `┌` opens the cycle on the first frame of the repeating unit, `├` carries it through
+        the rest, and `╰` closes with the count. Frame numbers count every repetition, so the
+        second member is [3] and anything after the cycle jumps past all 202 of them. =#
+        @test occursin(r"^ ┌ *\[2\] cycle_b\(n::Int64\)$", tr[4])
+        @test occursin(HERE, tr[5])
+        @test occursin(r"^ ├ *\[3\] cycle_a\(n::Int64\)$", tr[6])
+        @test occursin(HERE, tr[7])
+        @test occursin(r"^ ╰─+ repeated 101 times$", tr[8])
+        @test length(tr) == 8
+    else
+        #= Before 1.13 a trace this long short-circuits to Base's `show_reduced_backtrace`,
+        which has its own notation for a repeated run and abbreviates nothing. =#
+        @test occursin(r"the (last|above) 2 lines are repeated 100 more times", string(tr))
+    end
+    @test aligned(trace_block("cycle_a(100)"))
+end
+
+@testset "nested cycles" begin
+    tr = lines(trace_block("nest_outer(60)"))
+    @test occursin(r"^ *\[1\] error\(\)$", tr[2])
+    if CYCLE_BRACKETS
+        # The inner cycle opens a second gutter column and closes inside the outer one
+        @test occursin(r"^ ┌ *\[2\] nest_outer\(n::Int64\)$", tr[4])
+        @test occursin(r"^ ├┌ *\[3\] nest_inner\(n::Int64, k::Int64\)$", tr[6])
+        @test occursin(r"^ │╰─+ repeated 3 times$", tr[8])
+        @test occursin(r"^ ╰─+ repeated 61 times$", tr[9])
+        # The frame the recursion unwound to is numbered past every repetition
+        @test occursin(r"^ *\[2[0-9]{2}\] nest_outer\(n::Int64\)$", tr[10])
+    else
+        # Base's pre-1.13 reduced display, as above
+        @test occursin(r"lines are repeated \d+ more times", string(tr))
+    end
+    @test aligned(trace_block("nest_outer(60)"))
+end
+
 @testset "show(err) restores the full trace" begin
     out = repl_output("sum([])", "show(err)")
     i = findlast("1-element ExceptionStack:", out)
