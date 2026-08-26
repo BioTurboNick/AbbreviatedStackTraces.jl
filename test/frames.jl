@@ -122,3 +122,47 @@ end
     end
     @test aligned(covered)
 end
+
+@testset "where a cycle's bracket begins and ends" begin
+    #= A cycle is bracketed around what survives abbreviation. Where its span runs on into
+    dropped frames, the bracket begins or ends on the `⋮` those became, rather than leaving the
+    summary of a cycle's own frames outside it. A cycle with nothing left is not drawn. =#
+    hop(name) = (frame(name, "abstractarray.jl"), 1)
+    at(name) = (frame(name, "REPL[1]"), 1)
+    bracketed(block) = [l for l ∈ split(block, '\n') if startswith(l, r" [┌├│╰]")]
+
+    # Opens on a frame, and its span runs on into frames that are dropped
+    ends_inside = Any[hop(:below), at(:user_a), hop(:in_b), hop(:in_a), hop(:kept), at(:user_b)]
+    # Span begins among dropped frames, and ends on one that survives
+    starts_inside = Any[at(:user_a), hop(:in_c), hop(:in_b), hop(:kept), at(:user_b), at(:user_c)]
+    # Dropped frames both before the cycle begins and inside it
+    straddling = Any[hop(:below), at(:user_a), hop(:out_b), hop(:out_a), hop(:in_b), hop(:in_a),
+                     hop(:kept), at(:user_b), at(:user_c)]
+
+    if CYCLE_BRACKETS
+        br = bracketed(compact(ends_inside; cycles = [(2, 3, 50)]))
+        @test occursin(r"^ ┌ *\[2\] user_a$", br[1])
+        @test occursin(r"^ │ +⋮ internal", br[3]) # its own dropped frames, inside the bracket
+        @test occursin(r"^ ╰─+ repeated 50 times$", br[end])
+        @test length(br) == 4
+
+        br = bracketed(compact(starts_inside; cycles = [(2, 4, 50)]))
+        @test occursin(r"^ ┌ +⋮ internal", br[1]) # opens on the dropped frames, not showing them
+        @test occursin(r"^ ├ *\[4\] kept$", br[2])
+        @test occursin(r"^ ├ *\[5\] user_b$", br[4])
+        @test occursin(r"^ ╰─+ repeated 50 times$", br[end])
+
+        # Nothing of it survives
+        @test isempty(bracketed(compact(starts_inside; cycles = [(2, 2, 50)])))
+
+        # A `⋮` each side of where it begins, so frames that are not its own stay outside
+        block = lines(compact(straddling; cycles = [(5, 4, 50)]))
+        @test occursin(r"^ {2,}⋮ internal", block[6]) # frames 3 and 4, before the cycle
+        @test occursin(r"^ ┌ +⋮ internal", block[7]) # frames 5 and 6, its own
+    end
+
+    for (trace, cycles) ∈ ((ends_inside, [(2, 3, 50)]), (starts_inside, [(2, 4, 50)]),
+                           (starts_inside, [(2, 2, 50)]), (straddling, [(5, 4, 50)]))
+        @test aligned(compact(trace; cycles))
+    end
+end

@@ -157,9 +157,10 @@ function aligned(block::AbstractString)
     ls = split(block, '\n')
     indent(l) = length(match(r"^ *", l).match)
     #= A line inside a bracketed repeat that is not itself a frame — its location, or a `⋮`
-    standing in for frames dropped from the middle of it — carries `│` where its indentation
-    would otherwise be, at one column per level of nesting. =#
-    ungutter(l) = replace(l, r"^ │+" => m -> " "^length(m))
+    standing in for frames dropped from it — carries the gutter where its indentation would
+    otherwise be, at one column per level of nesting. A cycle whose frames were all dropped opens
+    on the `⋮` itself, so that can be a `┌` rather than a `│`. =#
+    ungutter(l) = replace(l, r"^ [│┌]+" => m -> " "^length(m))
     omitted = findfirst(l -> contains(l, '⋮'), ls)
     col = if omitted === nothing
         frames = filter(l -> contains(l, FRAME), ls)
